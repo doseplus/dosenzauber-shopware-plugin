@@ -24,6 +24,11 @@
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 
 <style>
+  /* Alten Neon-Konfigurator bei DZ-/WD-Produkten ausblenden (rendert nur wenn dieses Plugin aktiv ist) */
+  [class*="neonConfigurator--"],
+  .neonConfigurator,
+  [data-neon-configurator-name] { display: none !important; }
+
   .dp-cfg { font-family: 'Inter', ui-sans-serif, system-ui; color: #4d5452; }
   .dp-cfg [x-cloak] { display: none !important; }
   .dp-cfg .num { font-variant-numeric: tabular-nums; }
