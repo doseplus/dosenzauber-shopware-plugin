@@ -1,0 +1,13 @@
+{# Dosenzauber Konfigurator — wird über dem Standard-Buy-Widget gerendert bei DZ-Produkten #}
+{% sw_extends '@Storefront/storefront/page/product-detail/buy-widget.html.twig' %}
+
+{% block page_product_detail_buy_container %}
+    {% if page.dpDosenzauberActive %}
+        {% sw_include '@DoseplusDosenzauberConfigurator/storefront/component/dosenzauber-configurator.html.twig' with {
+            cfg: page.dpDosenzauberData,
+            product: page.product
+        } %}
+    {% endif %}
+
+    {{ parent() }}
+{% endblock %}

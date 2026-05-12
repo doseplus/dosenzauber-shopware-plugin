@@ -1,0 +1,26 @@
+{
+  "dpDosenzauber": {
+    "header": {
+      "title": "Veredelung jetzt konfigurieren",
+      "subtitle": "In 20 Sekunden zum Firmen-Geschenk · Live-Preis"
+    },
+    "option": {
+      "laser": {
+        "title": "Lasergravur",
+        "subtitle": "Dein Logo gelasert · ab 1 Karton"
+      },
+      "fuellung": {
+        "title": "Ritter Sport Mini",
+        "subtitle": "4-Sorten-Mix · inkl. Weihnachtskarte"
+      },
+      "verpackung": {
+        "title": "Versandfertig",
+        "subtitle": "Plano oder konfektioniert"
+      }
+    },
+    "cta": {
+      "addToCart": "In den Warenkorb"
+    },
+    "footer": "zzgl. 19% MwSt. · zzgl. Versand · PDF-Freigabe vor Produktion"
+  }
+}
