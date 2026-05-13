@@ -236,15 +236,15 @@
                         <p x-show="isAngebot()" x-cloak class="text-[10px] text-amber-700 font-bold uppercase tracking-wider mt-1">Angebot anfragen</p>
                     </div>
                 </div>
-                <input type="range" :min="cfg.kartonSize" max="3000" :step="cfg.kartonSize"
+                <input type="range" :min="cfg.kartonSize" max="1500" :step="cfg.kartonSize"
                        :value="quantity" @input="quantity = parseInt($event.target.value, 10)"
-                       :style="`--val: ${Math.max(0, Math.min(100, (quantity - cfg.kartonSize) / (3000 - cfg.kartonSize) * 100))}%`">
+                       :style="`--val: ${Math.max(0, Math.min(100, (quantity - cfg.kartonSize) / (1500 - cfg.kartonSize) * 100))}%`">
                 <div class="relative h-4 mt-1 text-[9px] uppercase tracking-wider text-stone-500 font-bold num">
                     <span class="absolute" style="left:0%" x-text="`${cfg.kartonSize}`"></span>
-                    <span class="absolute" :style="`left:${(500 - cfg.kartonSize) / (3000 - cfg.kartonSize) * 100}%; transform:translateX(-50%)`">500</span>
-                    <span class="absolute" :style="`left:${(1000 - cfg.kartonSize) / (3000 - cfg.kartonSize) * 100}%; transform:translateX(-50%)`">1.000</span>
-                    <span class="absolute" :style="`left:${(2000 - cfg.kartonSize) / (3000 - cfg.kartonSize) * 100}%; transform:translateX(-50%)`">2.000</span>
-                    <span class="absolute" style="right:0%">3.000</span>
+                    <span class="absolute" :style="`left:${(200 - cfg.kartonSize) / (1500 - cfg.kartonSize) * 100}%; transform:translateX(-50%)`">200</span>
+                    <span class="absolute" :style="`left:${(500 - cfg.kartonSize) / (1500 - cfg.kartonSize) * 100}%; transform:translateX(-50%)`">500</span>
+                    <span class="absolute" :style="`left:${(1000 - cfg.kartonSize) / (1500 - cfg.kartonSize) * 100}%; transform:translateX(-50%)`">1.000</span>
+                    <span class="absolute" style="right:0%">1.500</span>
                 </div>
                 <p x-show="options[0].on && quantity < cfg.kartonSize" x-cloak
                    class="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2 flex items-center gap-1.5">
@@ -288,10 +288,11 @@
                             <template x-if="karteVariant === 'persoenlich'"><span>Karte mit pers. Text — <span x-text="formatPrice(cfg.fixedPrices.karteText)"></span> pauschal</span></template>
                             <template x-if="karteVariant !== 'persoenlich'"><span>Karte mit Dosenmotiv — inklusive</span></template>
                         </li>
-                        <li x-show="options[2].on">
-                            <span x-text="cfg.uvNumber"></span> · Versandverpackung — <span x-text="cfg.uvSize"></span> ·
-                            <span x-show="verpackungVariant === 'plano'" class="font-semibold"><span x-text="formatPrice(cfg.fixedPrices.ukPlano)"></span> plano</span>
-                            <span x-show="verpackungVariant === 'konfektioniert'" class="font-semibold"><span x-text="formatPrice(cfg.fixedPrices.ukKonfektioniert)"></span> Dose im Karton verpackt</span>
+                        <li x-show="options[2].on && verpackungVariant === 'plano'">
+                            <span x-text="cfg.uvNumber"></span> · Versandverpackung plano — <span x-text="cfg.uvSize"></span> · <span class="font-semibold"><span x-text="formatPrice(cfg.fixedPrices.ukPlano)"></span> plano beigelegt</span>
+                        </li>
+                        <li x-show="options[2].on && verpackungVariant === 'konfektioniert'">
+                            <span x-text="cfg.uvNumber"></span> K · Versandverpackung konfektioniert — <span x-text="cfg.uvSize"></span> · <span class="font-semibold"><span x-text="formatPrice(cfg.fixedPrices.ukKonfektioniert)"></span> Dose im Karton verpackt</span>
                         </li>
                     </ul>
                 </div>
@@ -447,8 +448,8 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
         },
 
-        // ab 1000 Dosen: individuelles Angebot statt Auto-Preis
-        isAngebot() { return this.quantity > 1000; },
+        // ab >1050 Dosen: individuelles Angebot statt Auto-Preis (Puffer von 50 Stück über 1000)
+        isAngebot() { return this.quantity > 1050; },
 
         isVerpackungDisabled(value) {
             return value === 'konfektioniert' && !this.options[1].on;
