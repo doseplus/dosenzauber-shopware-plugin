@@ -58,4 +58,64 @@
         color: #7a7f7d;
         margin-top: 2px;
     }
+
+    .dp-cart-list-row {
+        cursor: pointer;
+        &:hover { background: #fafafa; }
+    }
+
+    .dp-cart-list-detail-row td {
+        background: #fafafa;
+        padding: 20px;
+    }
+
+    .dp-cart-list-detail {
+        background: white;
+        border: 1px solid #e5e5e5;
+        border-radius: 6px;
+        padding: 16px;
+        margin-bottom: 8px;
+
+        h4 {
+            margin: 0 0 12px 0;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e5e5e5;
+            font-size: 14px;
+        }
+    }
+
+    .dp-detail-section {
+        margin: 8px 0;
+        padding: 8px;
+        background: #f9f9f9;
+        border-radius: 4px;
+        font-size: 13px;
+
+        strong { display: block; margin-bottom: 4px; }
+    }
+
+    .dp-logo-preview {
+        margin-top: 8px;
+        img {
+            max-width: 200px;
+            max-height: 120px;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+            padding: 4px;
+            background: white;
+        }
+    }
+
+    .dp-karte-text {
+        margin-top: 6px;
+        blockquote {
+            margin: 4px 0 0 0;
+            padding: 8px 12px;
+            background: #fef5f1;
+            border-left: 3px solid #e53009;
+            border-radius: 4px;
+            font-style: italic;
+            white-space: pre-wrap;
+        }
+    }
 }

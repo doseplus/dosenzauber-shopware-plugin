@@ -43,33 +43,75 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="cart in carts" :key="cart.token">
-                            <td>
-                                <code>{{ cart.token.substring(0, 12) }}…</code>
-                                <div v-if="cart.name && cart.name !== cart.token" class="dp-cart-list-secondary">
-                                    {{ cart.name }}
-                                </div>
-                            </td>
-                            <td>
-                                <span v-if="cart.customerId">
-                                    <router-link :to="{ name: 'sw.customer.detail', params: { id: cart.customerId } }">
-                                        {{ cart.customerId.substring(0, 8) }}…
-                                    </router-link>
-                                </span>
-                                <span v-else class="dp-cart-list-secondary">Gast</span>
-                            </td>
-                            <td>{{ formatDate(cart.updatedAt) }}</td>
-                            <td>
-                                <ul class="dp-cart-list-items">
-                                    <li v-for="(item, i) in cart.dpLineItems" :key="i">
-                                        <strong>{{ item.quantity }}×</strong>
-                                        {{ item.label }}
-                                        <div class="dp-cart-list-config">{{ configSummary(item) }}</div>
-                                    </li>
-                                </ul>
-                            </td>
-                            <td class="text-right">{{ formatPrice(cart.totalPrice) }}</td>
-                        </tr>
+                        <template v-for="cart in carts" :key="cart.token">
+                            <tr class="dp-cart-list-row" @click="toggleExpand(cart.token)">
+                                <td>
+                                    <code>{{ cart.token.substring(0, 12) }}…</code>
+                                </td>
+                                <td>
+                                    <span v-if="cart.customerId">
+                                        <router-link :to="{ name: 'sw.customer.detail', params: { id: cart.customerId } }">
+                                            {{ cart.customerId.substring(0, 8) }}…
+                                        </router-link>
+                                    </span>
+                                    <span v-else class="dp-cart-list-secondary">Gast</span>
+                                </td>
+                                <td>{{ formatDate(cart.updatedAt) }}</td>
+                                <td>
+                                    <ul class="dp-cart-list-items">
+                                        <li v-for="(item, i) in cart.dpLineItems" :key="i">
+                                            <strong>{{ item.quantity }}×</strong>
+                                            {{ item.label }}
+                                            <div class="dp-cart-list-config">{{ configSummary(item) }}</div>
+                                        </li>
+                                    </ul>
+                                </td>
+                                <td class="text-right">
+                                    {{ formatPrice(cart.totalPrice) }}
+                                    <div class="dp-cart-list-secondary">
+                                        {{ expanded[cart.token] ? '▼ einklappen' : '▶ Details' }}
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr v-if="expanded[cart.token]" class="dp-cart-list-detail-row">
+                                <td colspan="5">
+                                    <div v-for="(item, i) in cart.dpLineItems" :key="i" class="dp-cart-list-detail">
+                                        <h4>{{ item.quantity }}× {{ item.label }}</h4>
+
+                                        <div v-if="item.config.options && item.config.options.laser" class="dp-detail-section">
+                                            <strong>🔥 Lasergravur</strong>
+                                            <div>Personalisierung: {{ item.config.laser?.personalisierung ? 'JA (+90€)' : 'nein' }}</div>
+                                            <div v-if="item.config.laser?.logoFileName">
+                                                Logo: <a v-if="item.config.laser.logoUrl" :href="item.config.laser.logoUrl" target="_blank">{{ item.config.laser.logoFileName }}</a>
+                                                <span v-else>{{ item.config.laser.logoFileName }}</span>
+                                            </div>
+                                            <div v-if="item.config.laser?.logoUrl" class="dp-logo-preview">
+                                                <img :src="item.config.laser.logoUrl" :alt="item.config.laser.logoFileName">
+                                            </div>
+                                        </div>
+
+                                        <div v-if="item.config.options && item.config.options.fuellung" class="dp-detail-section">
+                                            <strong>🍫 Befüllung Ritter Sport</strong>
+                                            <div>Riegel/Dose: {{ item.config.fuellung?.riegelProDose }}</div>
+                                            <div>Grußkarte: {{ item.config.fuellung?.karteVariant === 'persoenlich' ? 'persönlicher Text (+125€)' : 'Karte mit Dosenmotiv' }}</div>
+                                            <div v-if="item.config.fuellung?.karteText" class="dp-karte-text">
+                                                <strong>Karten-Text:</strong>
+                                                <blockquote>{{ item.config.fuellung.karteText }}</blockquote>
+                                            </div>
+                                        </div>
+
+                                        <div v-if="item.config.options && item.config.options.verpackung" class="dp-detail-section">
+                                            <strong>📦 Verpackung:</strong>
+                                            {{ item.config.verpackung === 'konfektioniert' ? 'Konfektioniert (+1,19/Dose)' : 'Plano beigelegt (+0,98/Dose)' }}
+                                        </div>
+
+                                        <div v-if="item.config.promo && item.config.promo.code" class="dp-detail-section">
+                                            <strong>🎟️ Rabattcode:</strong> {{ item.config.promo.code }} ({{ item.config.promo.label }})
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
                     </tbody>
                 </table>
             </sw-card>

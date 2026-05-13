@@ -13,6 +13,7 @@ Component.register('dp-cart-list', {
             carts: [],
             loading: false,
             error: null,
+            expanded: {},
         };
     },
 
@@ -56,6 +57,10 @@ Component.register('dp-cart-list', {
             } catch (e) {
                 return p + ' €';
             }
+        },
+
+        toggleExpand(token) {
+            this.expanded = { ...this.expanded, [token]: !this.expanded[token] };
         },
 
         configSummary(item) {
