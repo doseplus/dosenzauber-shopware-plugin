@@ -143,7 +143,7 @@ class ResponseSubscriber implements EventSubscriberInterface
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 HTML;
 
-        $bodyContent = '<div class="dp-cfg-injected" style="margin:0;padding:0">' . $configuratorHtml . '</div>';
+        $bodyContent = '<div class="dp-cfg-injected" style="margin:0 0 8px 0;padding:0">' . $configuratorHtml . '</div>';
 
         // Dependencies vor </head> einfügen
         if (stripos($content, '</head>') !== false) {

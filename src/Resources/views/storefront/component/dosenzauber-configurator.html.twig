@@ -50,7 +50,7 @@
 <script>window.dpDosenzauberBasePath = "{{ app.request.basePath|default('') }}";</script>
 
 <div class="dp-cfg"
-     style="margin-top:0 !important"
+     style="margin-top:0 !important; margin-bottom:0 !important"
      x-data='dpDosenzauberCfg({{ cfg|json_encode|raw }}, {{ productImageFilled|json_encode|raw }})'
      x-init="$nextTick(() => { initSliders(); if (typeof lucide !== 'undefined') lucide.createIcons(); })">
 
@@ -422,7 +422,7 @@
                 </p>
             </div>
 
-            <p class="text-[10px] text-stone-500 text-center">
+            <p class="text-[10px] text-stone-500 text-center my-2">
                 zzgl. 19% MwSt. · zzgl. Versand · PDF-Freigabe vor Produktion
             </p>
         </div>
