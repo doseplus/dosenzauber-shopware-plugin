@@ -455,11 +455,16 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             { value:'konfektioniert',label:'Komplett versandfertig',   hint:'Dose im Karton verpackt',     price: cfg.fixedPrices.ukKonfektioniert },
         ],
         // Bekannte Rabattcodes — Backend validiert beim Cart-Add nochmal
+        // Bekannte Codes nur für Vorschau-Rabatt im Konfigurator. Tatsächliche Validierung
+        // + Rabatt-Anwendung passiert serverseitig in Shopware (Marketing → Promotions).
+        // Unbekannte Codes werden trotzdem akzeptiert und ans Backend geschickt — dort
+        // entscheidet Shopware. Bekannte Codes hier müssen mit Shopware-Promotions
+        // namentlich übereinstimmen, sonst sieht der Kunde Preview-Rabatt aber keinen echten.
         knownPromos: {
-            'XMAS20':       { rabatt: 0.20, label: '20% Weihnachts-Rabatt' },
-            'WEIHNACHTEN20':{ rabatt: 0.20, label: '20% Weihnachts-Rabatt' },
-            'DOSENZAUBER10':{ rabatt: 0.10, label: '10% Dosenzauber-Rabatt' },
-            'B2B15':        { rabatt: 0.15, label: '15% B2B-Rabatt' },
+            'XMAS20':       { rabatt: 0.20, label: '20% Weihnachts-Rabatt (Vorschau)' },
+            'WEIHNACHTEN20':{ rabatt: 0.20, label: '20% Weihnachts-Rabatt (Vorschau)' },
+            'DOSENZAUBER10':{ rabatt: 0.10, label: '10% Dosenzauber-Rabatt (Vorschau)' },
+            'B2B15':        { rabatt: 0.15, label: '15% B2B-Rabatt (Vorschau)' },
         },
         promoInput: '',
         promoError: '',
@@ -525,11 +530,18 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             const code = (this.promoInput || '').trim().toUpperCase();
             this.promoError = '';
             if (!code) { this.promoError = 'Bitte Code eingeben'; return; }
+
             const found = this.knownPromos[code];
-            if (!found) { this.promoError = 'Code ungültig oder abgelaufen'; return; }
-            this.promo = { code: code, rabatt: found.rabatt, label: found.label };
+            if (found) {
+                // Bekannter Code → Vorschau-Rabatt anzeigen
+                this.promo = { code: code, rabatt: found.rabatt, label: found.label };
+            } else {
+                // Unbekannter Code → trotzdem akzeptieren, Shopware prüft beim Cart-Add
+                this.promo = { code: code, rabatt: 0, label: 'Wird im Warenkorb geprüft' };
+            }
             this.promoApplied = true;
             this.promoInput = '';
+            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
         },
         removePromo() {
             this.promoApplied = false;
@@ -615,15 +627,34 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
                 }
 
                 const json = await res.json();
-                // Optional: Logo separat hochladen, bevor zum Warenkorb redirected wird
+
+                // Logo separat hochladen (Multipart). Fehler hier sind BLOCKEND, weil
+                // ohne Logo die Lasergravur unbrauchbar wäre.
                 if (this.options[0].on && this.logoFile && json.lineItemId) {
-                    await this.uploadLogo(json.lineItemId).catch(() => {/* logo-upload nicht-kritisch */});
+                    try {
+                        await this.uploadLogo(json.lineItemId);
+                    } catch (logoErr) {
+                        console.error('[Dosenzauber] Logo-Upload fehlgeschlagen:', logoErr);
+                        this.cartError = 'Produkt wurde in den Warenkorb gelegt, aber das Logo konnte nicht hochgeladen werden. Bitte erneut anhängen — Datei: ' + (logoErr.message || 'unbekannter Fehler');
+                        this.busy = false;
+                        return;
+                    }
+                }
+
+                // Falls Shopware den Rabattcode rejected hat: Hinweis statt stiller Fehler
+                if (this.promoApplied && json.promoApplied === false) {
+                    const msg = json.promoError || 'Rabattcode ungültig';
+                    if (!confirm(`Produkt liegt im Warenkorb, aber: ${msg}.\n\nTrotzdem zum Warenkorb?`)) {
+                        this.busy = false;
+                        this.cartError = msg + '. Bitte einen anderen Code probieren.';
+                        return;
+                    }
                 }
 
                 window.location.href = json.redirectUrl || '/checkout/cart';
             } catch (e) {
                 console.error('[Dosenzauber] addToCart failed:', e);
-                this.cartError = 'Hinzufügen fehlgeschlagen. Bitte später erneut versuchen oder telefonisch bestellen.';
+                this.cartError = 'Hinzufügen fehlgeschlagen: ' + (e.message || 'Unbekannter Fehler') + '. Bitte später erneut versuchen oder telefonisch bestellen.';
                 this.busy = false;
             }
         },
@@ -633,12 +664,17 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             const fd = new FormData();
             fd.append('lineItemId', lineItemId);
             fd.append('logo', this.logoFile);
-            await fetch('/dosenzauber/upload-logo', {
+            const res = await fetch('/dosenzauber/upload-logo', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
                 body: fd,
             });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || ('HTTP ' + res.status));
+            }
+            return res.json();
         },
     };
 };

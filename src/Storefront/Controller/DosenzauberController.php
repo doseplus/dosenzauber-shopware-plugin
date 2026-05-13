@@ -3,10 +3,12 @@
 namespace Doseplus\DosenzauberConfigurator\Storefront\Controller;
 
 use Doseplus\DosenzauberConfigurator\Service\ConfiguratorDataProvider;
+use Psr\Log\LoggerInterface;
 use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Cart\LineItemFactoryHandler\LineItemFactoryRegistry;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
+use Shopware\Core\Checkout\Promotion\Cart\PromotionItemBuilder;
 use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductEntity;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Routing\Annotation\Since;
@@ -33,6 +35,7 @@ class DosenzauberController extends StorefrontController
         private readonly LineItemFactoryRegistry $lineItemFactory,
         private readonly SalesChannelRepository $productRepository,
         private readonly ConfiguratorDataProvider $dataProvider,
+        private readonly LoggerInterface $logger,
     ) {}
 
     #[Route(
@@ -80,12 +83,40 @@ class DosenzauberController extends StorefrontController
 
         $cart = $this->cartService->add($cart, $lineItem, $context);
 
+        // Promotion-Code an Shopware durchreichen (Weg A: native Promotion-Engine)
+        $promoCode = trim((string)($data['promo']['code'] ?? ''));
+        $promoApplied = false;
+        $promoError = null;
+        if ($promoCode !== '') {
+            try {
+                $promotionItem = (new PromotionItemBuilder())->buildPlaceholderItem($promoCode);
+                $cart = $this->cartService->add($cart, $promotionItem, $context);
+
+                // Prüfen ob Shopware den Code akzeptiert hat (gültige Promotion = LineItem bleibt drin, ungültige = wird automatisch entfernt + Error im Cart)
+                $promoApplied = $cart->getLineItems()->filter(
+                    fn(LineItem $li) => $li->getType() === 'promotion' && $li->getReferencedId() === $promoCode
+                )->count() > 0;
+
+                if (!$promoApplied) {
+                    $promoError = 'Rabattcode ungültig oder Bedingungen nicht erfüllt';
+                }
+            } catch (\Throwable $e) {
+                $this->logger->info('Dosenzauber: Promo-Code konnte nicht angewendet werden', [
+                    'code'  => $promoCode,
+                    'error' => $e->getMessage(),
+                ]);
+                $promoError = 'Rabattcode konnte nicht angewendet werden';
+            }
+        }
+
         return new JsonResponse([
-            'ok'          => true,
-            'redirectUrl' => $this->generateUrl('frontend.checkout.cart.page'),
-            'cartToken'   => $context->getToken(),
-            'itemCount'   => $cart->getLineItems()->count(),
-            'lineItemId'  => $lineItem->getId(),
+            'ok'           => true,
+            'redirectUrl'  => $this->generateUrl('frontend.checkout.cart.page'),
+            'cartToken'    => $context->getToken(),
+            'itemCount'    => $cart->getLineItems()->count(),
+            'lineItemId'   => $lineItem->getId(),
+            'promoApplied' => $promoApplied,
+            'promoError'   => $promoError,
         ]);
     }
 
