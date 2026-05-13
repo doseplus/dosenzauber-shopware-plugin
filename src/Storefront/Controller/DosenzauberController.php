@@ -106,7 +106,7 @@ class DosenzauberController extends StorefrontController
             $lineItem->setPayloadValue('dpDosenzauberConfig', $sanitized);
             $lineItem->setPayloadValue('dpGroupId', $configGroupId);
             $lineItem->setRemovable(true);
-            $lineItem->setStackable(false);
+            $lineItem->setStackable(true); // qty > 1 erlaubt; unique id verhindert Merge mit anderen Konfigs
 
             $cart = $this->cartService->add($cart, $lineItem, $context);
 
@@ -413,7 +413,7 @@ class DosenzauberController extends StorefrontController
                 'baseLabel'         => $add['label'],
             ]);
             $optItem->setRemovable(true);
-            $optItem->setStackable(false);
+            $optItem->setStackable(true);
             $cart = $this->cartService->add($cart, $optItem, $context);
         }
 
