@@ -46,7 +46,7 @@
   .dp-cfg .lucide { width:1em; height:1em; display:inline-block; vertical-align:-0.125em; }
 </style>
 
-<div class="dp-cfg my-6"
+<div class="dp-cfg mt-2 mb-4"
      x-data='dpDosenzauberCfg({{ cfg|json_encode|raw }}, {{ productImageFilled|json_encode|raw }})'
      x-init="$nextTick(() => { initSliders(); if (typeof lucide !== 'undefined') lucide.createIcons(); })">
 
