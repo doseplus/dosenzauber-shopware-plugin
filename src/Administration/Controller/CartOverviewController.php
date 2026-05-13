@@ -36,7 +36,7 @@ class CartOverviewController
 
             // cart-Tabelle in Shopware 6.6 (manchmal mit Prefix)
             $rows = $this->connection->fetchAllAssociative(
-                'SELECT token, name, payload, compressed, customer_id, sales_channel_id, created_at, updated_at, price
+                'SELECT token, payload, compressed, customer_id, sales_channel_id, created_at, updated_at, price, line_item_count
                  FROM cart
                  WHERE updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
                  ORDER BY updated_at DESC
@@ -130,12 +130,13 @@ class CartOverviewController
 
             return [
                 'token'           => $row['token'],
-                'name'            => $row['name'],
+                'name'            => null,
                 'customerId'      => $customerId,
                 'salesChannelId'  => $salesChannelId,
                 'createdAt'       => $row['created_at'],
                 'updatedAt'       => $row['updated_at'],
-                'totalPrice'      => $this->extractTotalPrice($row['price'] ?? null),
+                'totalPrice'      => isset($row['price']) ? (float)$row['price'] : null,
+                'lineItemCount'   => $row['line_item_count'] ?? null,
                 'dpLineItems'     => $dpItems,
             ];
         } catch (\Throwable $e) {
