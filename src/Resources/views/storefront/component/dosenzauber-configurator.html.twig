@@ -416,6 +416,10 @@
                     <span x-show="busy" x-cloak>Bitte warten…</span>
                 </button>
                 <p x-show="cartError" x-cloak x-text="cartError" class="text-[11px] text-red-400 mt-2 text-center"></p>
+                <p x-show="cartSuccess" x-cloak class="text-[11px] text-green-400 mt-2 text-center flex items-center justify-center gap-1">
+                    <i data-lucide="check-circle-2" class="lucide w-3.5 h-3.5"></i>
+                    <span x-text="cartSuccess"></span>
+                </p>
             </div>
 
             <p class="text-[10px] text-stone-500 text-center">
@@ -432,6 +436,7 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
         productImageFilled: productImageFilled || '',
         busy: false,
         cartError: '',
+        cartSuccess: '',
         isDragging: false,
         logoFile: null,
         logoPreview: null,
@@ -646,22 +651,45 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
                     }
                 }
 
-                // Falls Shopware den Rabattcode rejected hat: Hinweis statt stiller Fehler
+                // Falls Shopware den Rabattcode rejected hat: nicht-blockender Hinweis
                 if (this.promoApplied && json.promoApplied === false) {
-                    const msg = json.promoError || 'Rabattcode ungültig';
-                    if (!confirm(`Produkt liegt im Warenkorb, aber: ${msg}.\n\nTrotzdem zum Warenkorb?`)) {
-                        this.busy = false;
-                        this.cartError = msg + '. Bitte einen anderen Code probieren.';
-                        return;
-                    }
+                    this.cartError = (json.promoError || 'Rabattcode ungültig') + ' (Produkt liegt trotzdem im Warenkorb).';
                 }
 
-                window.location.href = json.redirectUrl || '/checkout/cart';
+                // Erfolg: auf der Produktseite bleiben + Offcanvas-Cart öffnen.
+                // (B2B-Plugin blockt die /checkout/cart-Seite, aber Offcanvas geht.)
+                this.openOffcanvasCart();
+                this.cartSuccess = json.itemCount
+                    ? `${json.itemCount} Position(en) im Warenkorb`
+                    : 'Erfolgreich zum Warenkorb hinzugefügt';
+                this.busy = false;
+                // Auto-Reset des Success-State nach 6 Sekunden
+                setTimeout(() => { this.cartSuccess = ''; }, 6000);
+                return;
             } catch (e) {
                 console.error('[Dosenzauber] addToCart failed:', e);
                 this.cartError = 'Hinzufügen fehlgeschlagen: ' + (e.message || 'Unbekannter Fehler') + '. Bitte später erneut versuchen oder telefonisch bestellen.';
                 this.busy = false;
             }
+        },
+
+        openOffcanvasCart() {
+            // 1. Shopware-PluginManager-Instance (wenn vorhanden)
+            try {
+                if (window.PluginManager) {
+                    const elements = document.querySelectorAll('[data-offcanvas-cart]');
+                    elements.forEach(el => {
+                        const plugin = window.PluginManager.getPluginInstanceFromElement(el, 'OffCanvasCart');
+                        if (plugin && typeof plugin.openOffCanvas === 'function') plugin.openOffCanvas();
+                    });
+                }
+            } catch (e) { /* ignore */ }
+
+            // 2. Fallback: Cart-Icon klicken (öffnet Offcanvas)
+            try {
+                const cartTrigger = document.querySelector('.header-cart [data-offcanvas-cart-trigger], .header-cart a[href*="cart"], .header-cart-link');
+                if (cartTrigger) cartTrigger.click();
+            } catch (e) { /* ignore */ }
         },
 
         async uploadLogo(lineItemId) {
