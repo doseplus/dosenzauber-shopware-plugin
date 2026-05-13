@@ -318,25 +318,39 @@
             {# Gesamt + CTA (versteckt im Angebot-Modus) #}
             <div x-show="!isAngebot()" x-cloak class="bg-stone-900 text-white rounded-xl p-5 mt-3">
 
-                {# Gutschein-Badge XMAS20 #}
-                <div class="bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg px-3 py-2 mb-3 flex items-center gap-2 shadow">
+                {# Rabattcode-Eingabe (wenn noch nicht eingelöst) #}
+                <div x-show="!promoApplied" x-cloak class="bg-stone-800 border border-stone-700 rounded-lg p-3 mb-3">
+                    <p class="text-xs text-white/80 leading-snug">Sie haben einen gültigen Rabattcode? Bitte geben Sie diesen hier ein.</p>
+                    <div class="flex gap-1.5 mt-2">
+                        <input type="text" x-model="promoInput" @keyup.enter="applyPromo()" placeholder="z.B. XMAS20" class="flex-1 bg-stone-700 text-white text-xs uppercase tracking-wider rounded px-2.5 py-2 placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400 font-bold">
+                        <button @click="applyPromo()" class="bg-amber-500 hover:bg-amber-600 text-stone-900 text-xs font-bold px-3 py-2 rounded transition">Einlösen</button>
+                    </div>
+                    <p x-show="promoError" x-cloak class="text-[10px] text-red-300 mt-1.5 flex items-center gap-1"><i data-lucide="alert-circle" class="lucide w-3 h-3"></i> <span x-text="promoError"></span></p>
+                </div>
+
+                {# Aktiver Rabattcode-Badge #}
+                <div x-show="promoApplied" x-cloak class="bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg px-3 py-2 mb-3 flex items-center gap-2 shadow">
                     <i data-lucide="gift" class="lucide w-4 h-4"></i>
                     <span class="font-extrabold text-sm tracking-wide" x-text="promo.code"></span>
                     <span class="text-xs">·</span>
                     <span class="text-xs flex-1" x-text="promo.label"></span>
                     <span class="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-semibold">automatisch im Warenkorb</span>
+                    <button @click="removePromo()" class="text-white/80 hover:text-white"><i data-lucide="x" class="lucide w-3.5 h-3.5"></i></button>
                 </div>
 
                 <div class="flex items-start justify-between mb-3 gap-3 flex-wrap">
                     <div class="flex-1">
-                        <p class="text-[10px] uppercase tracking-wider text-white/60 font-bold">Gesamt netto · mit <span x-text="promo.code"></span></p>
+                        <p class="text-[10px] uppercase tracking-wider text-white/60 font-bold">
+                            Gesamt netto<span x-show="promoApplied" x-cloak> · mit <span x-text="promo.code"></span></span>
+                        </p>
                         <div class="flex items-baseline gap-2 mt-1">
-                            <p class="text-3xl font-extrabold num text-amber-300" x-text="formatPrice(calcGesamtMitRabatt())"></p>
-                            <p class="text-base text-white/50 line-through num" x-text="formatPrice(calcGesamt())"></p>
+                            <p class="text-3xl font-extrabold num" :class="promoApplied ? 'text-amber-300' : 'text-white'"
+                               x-text="formatPrice(promoApplied ? calcGesamtMitRabatt() : calcGesamt())"></p>
+                            <p x-show="promoApplied" x-cloak class="text-base text-white/50 line-through num" x-text="formatPrice(calcGesamt())"></p>
                         </div>
                         <p class="text-[10px] text-white/60 mt-0.5 num">
                             <span x-text="`${formatPrice(calcStueckpreis())} / Dose × ${quantity}`"></span> = <span x-text="formatPrice(calcStueckpreis() * quantity)"></span>
-                            · Sie sparen <span class="text-amber-300 font-semibold" x-text="formatPrice(calcRabatt())"></span>
+                            <span x-show="promoApplied" x-cloak>· Sie sparen <span class="text-amber-300 font-semibold" x-text="formatPrice(calcRabatt())"></span></span>
                         </p>
                     </div>
                     <div class="text-right">
@@ -436,8 +450,17 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             { value:'plano',         label:'Plano beigelegt',          hint:'Karton flach, Kunde packt',   price: cfg.fixedPrices.ukPlano },
             { value:'konfektioniert',label:'Komplett versandfertig',   hint:'Dose im Karton verpackt',     price: cfg.fixedPrices.ukKonfektioniert },
         ],
-        // Aktiver Promo-Code (wird im Warenkorb automatisch eingelöst)
-        promo: { code: 'XMAS20', rabatt: 0.20, label: '20% Weihnachts-Rabatt' },
+        // Bekannte Rabattcodes — Backend validiert beim Cart-Add nochmal
+        knownPromos: {
+            'XMAS20':       { rabatt: 0.20, label: '20% Weihnachts-Rabatt' },
+            'WEIHNACHTEN20':{ rabatt: 0.20, label: '20% Weihnachts-Rabatt' },
+            'DOSENZAUBER10':{ rabatt: 0.10, label: '10% Dosenzauber-Rabatt' },
+            'B2B15':        { rabatt: 0.15, label: '15% B2B-Rabatt' },
+        },
+        promoInput: '',
+        promoError: '',
+        promoApplied: false,
+        promo: { code: '', rabatt: 0, label: '' },
 
         toggle(idx) {
             this.options[idx].on = !this.options[idx].on;
@@ -491,8 +514,25 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             return e;
         },
         calcGesamt() { return this.calcStueckpreis() * this.quantity + this.calcEinmalkosten(); },
-        calcRabatt() { return this.calcGesamt() * this.promo.rabatt; },
+        calcRabatt() { return this.promoApplied ? this.calcGesamt() * this.promo.rabatt : 0; },
         calcGesamtMitRabatt() { return this.calcGesamt() - this.calcRabatt(); },
+
+        applyPromo() {
+            const code = (this.promoInput || '').trim().toUpperCase();
+            this.promoError = '';
+            if (!code) { this.promoError = 'Bitte Code eingeben'; return; }
+            const found = this.knownPromos[code];
+            if (!found) { this.promoError = 'Code ungültig oder abgelaufen'; return; }
+            this.promo = { code: code, rabatt: found.rabatt, label: found.label };
+            this.promoApplied = true;
+            this.promoInput = '';
+        },
+        removePromo() {
+            this.promoApplied = false;
+            this.promo = { code: '', rabatt: 0, label: '' };
+            this.promoInput = '';
+            this.promoError = '';
+        },
 
         formatPrice(n) { return typeof n !== 'number' || isNaN(n) ? '—' : new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n); },
         updateSlider(e) {
