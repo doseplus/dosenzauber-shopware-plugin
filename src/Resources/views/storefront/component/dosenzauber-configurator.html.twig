@@ -46,6 +46,9 @@
   .dp-cfg .lucide { width:1em; height:1em; display:inline-block; vertical-align:-0.125em; }
 </style>
 
+{# Stage/Live-kompatibler Base-Path für API-Routes (z.B. /dpstage/dosenzauber/add-to-cart) #}
+<script>window.dpDosenzauberBasePath = "{{ app.request.basePath|default('') }}";</script>
+
 <div class="dp-cfg mt-2 mb-4"
      x-data='dpDosenzauberCfg({{ cfg|json_encode|raw }}, {{ productImageFilled|json_encode|raw }})'
      x-init="$nextTick(() => { initSliders(); if (typeof lucide !== 'undefined') lucide.createIcons(); })">
@@ -609,7 +612,8 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
 
             try {
                 // CSRF: Shopware 6.6 erkennt POSTs via XmlHttpRequest-Header — keine separaten Tokens nötig
-                const res = await fetch('/dosenzauber/add-to-cart', {
+                const basePath = (window.dpDosenzauberBasePath || '');
+                const res = await fetch(basePath + '/dosenzauber/add-to-cart', {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: {
@@ -663,7 +667,8 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             const fd = new FormData();
             fd.append('lineItemId', lineItemId);
             fd.append('logo', this.logoFile);
-            const res = await fetch('/dosenzauber/upload-logo', {
+            const basePath = (window.dpDosenzauberBasePath || '');
+            const res = await fetch(basePath + '/dosenzauber/upload-logo', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
