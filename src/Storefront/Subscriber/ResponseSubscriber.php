@@ -131,39 +131,113 @@ class ResponseSubscriber implements EventSubscriberInterface
         }
 
         $injection = <<<HTML
+<!-- Dosenzauber-Konfigurator: Dependencies + Template + Injection-Loader -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js" defer></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
 <template id="dp-cfg-source">{$configuratorHtml}</template>
+
 <script>
 (function () {
     'use strict';
+
     function buyArea() {
         return document.querySelector('.product-detail-buy')
             || document.querySelector('.product-detail-content-main')
             || document.querySelector('.product-detail-main')
             || document.querySelector('.product-detail');
     }
-    function alreadyInjected() { return !!document.querySelector('.dp-cfg, .dp-cfg-injected'); }
-    function inject() {
-        if (alreadyInjected()) return true;
+
+    function alreadyInjected() {
+        return !!document.querySelector('.dp-cfg-injected');
+    }
+
+    // <script>-Tags die via innerHTML kopiert wurden, EXECUTEN nicht.
+    // Diese Funktion klont sie als neue Elemente, dann führt der Browser sie aus.
+    function reExecuteScripts(root) {
+        var scripts = root.querySelectorAll('script');
+        scripts.forEach(function (oldScript) {
+            var newScript = document.createElement('script');
+            for (var i = 0; i < oldScript.attributes.length; i++) {
+                var a = oldScript.attributes[i];
+                newScript.setAttribute(a.name, a.value);
+            }
+            newScript.textContent = oldScript.textContent;
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+    }
+
+    function performInject(area) {
         var src = document.getElementById('dp-cfg-source');
         if (!src) return false;
-        var area = buyArea();
-        if (!area) return false;
+
         var wrapper = document.createElement('div');
         wrapper.className = 'dp-cfg-injected';
         wrapper.innerHTML = src.innerHTML;
         area.insertBefore(wrapper, area.firstChild);
-        if (window.Alpine && typeof window.Alpine.initTree === 'function') {
-            try { window.Alpine.initTree(wrapper); } catch (e) {}
+
+        // Inline-Scripts im Konfigurator-Template ausführen (window.dpDosenzauberCfg etc.)
+        reExecuteScripts(wrapper);
+
+        // Alpine.js anwenden — sobald geladen
+        function applyAlpine() {
+            if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+                try { window.Alpine.initTree(wrapper); } catch (e) { console.error('[Dosenzauber] Alpine.initTree fail:', e); }
+                return true;
+            }
+            return false;
         }
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            try { window.lucide.createIcons(); } catch (e) {}
+
+        if (!applyAlpine()) {
+            // Alpine noch nicht geladen — auf 'alpine:init'-Event warten oder pollen
+            document.addEventListener('alpine:initialized', function onInit() {
+                document.removeEventListener('alpine:initialized', onInit);
+                applyAlpine();
+            });
+            var attempts = 0;
+            var poller = setInterval(function () {
+                attempts++;
+                if (applyAlpine() || attempts > 50) clearInterval(poller);
+            }, 100);
         }
+
+        // Lucide-Icons rendern
+        function applyLucide() {
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                try { window.lucide.createIcons(); } catch (e) {}
+                return true;
+            }
+            return false;
+        }
+        if (!applyLucide()) {
+            var lucideAttempts = 0;
+            var lucidePoller = setInterval(function () {
+                lucideAttempts++;
+                if (applyLucide() || lucideAttempts > 50) clearInterval(lucidePoller);
+            }, 100);
+        }
+
         return true;
     }
+
     function tryInjectWithRetries() {
-        if (inject()) return;
-        [50, 150, 500, 1500, 3000].forEach(function (d) { setTimeout(inject, d); });
+        if (alreadyInjected()) return;
+        var area = buyArea();
+        if (area) { performInject(area); return; }
+        // Wenn buyArea noch nicht im DOM: wiederholt versuchen
+        [50, 150, 500, 1500, 3000].forEach(function (delay) {
+            setTimeout(function () {
+                if (alreadyInjected()) return;
+                var a = buyArea();
+                if (a) performInject(a);
+            }, delay);
+        });
     }
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', tryInjectWithRetries);
     } else {
