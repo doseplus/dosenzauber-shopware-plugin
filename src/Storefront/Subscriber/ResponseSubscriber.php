@@ -150,27 +150,13 @@ HTML;
             $content = preg_replace('/<\/head>/i', $headDeps . "\n</head>", $content, 1);
         }
 
-        // Injection direkt NACH der VPE-Row (innerhalb von .product-detail-buy):
-        //   col-lg-5 Top-Row enthält dann: Art.-Nr. / Maße / VPE / Konfigurator
-        //   col-lg-7 Top-Row enthält: Image + Thumbnails
-        // Fallback: vor .product-detail-contact (bottom row), dann </body>.
-        $injected = false;
-
-        $vpePattern = '/(<div\s+class="[^"]*\bproduct-detail-additional-information\b[^"]*"[^>]*>\s*<div[^>]*>\s*<strong>VPE:<\/strong>\s*<\/div>\s*<div[^>]*>[\s\S]*?<\/div>\s*<\/div>)/i';
-        if (preg_match($vpePattern, $content)) {
-            $content = preg_replace($vpePattern, '$1' . "\n" . $bodyContent, $content, 1);
-            $injected = true;
-        }
-
-        if (!$injected) {
-            $contactPattern = '/<div\s+class="[^"]*\bproduct-detail-contact\b[^"]*"/i';
-            if (preg_match($contactPattern, $content)) {
-                $content = preg_replace($contactPattern, $bodyContent . "\n" . '$0', $content, 1);
-                $injected = true;
-            }
-        }
-
-        if (!$injected) {
+        // Injection vor .product-detail-contact: col-lg-5 mit Konfigurator,
+        //   col-lg-7 Sibling = Beschreibungs-Tabs (Side-by-Side).
+        // Fallback: vor </body>.
+        $contactPattern = '/<div\s+class="[^"]*\bproduct-detail-contact\b[^"]*"/i';
+        if (preg_match($contactPattern, $content)) {
+            $content = preg_replace($contactPattern, $bodyContent . "\n" . '$0', $content, 1);
+        } else {
             $content = preg_replace('/<\/body>/i', $bodyContent . "\n</body>", $content, 1);
         }
 
