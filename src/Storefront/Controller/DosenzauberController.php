@@ -94,13 +94,15 @@ class DosenzauberController extends StorefrontController
             $sanitized = $this->sanitizeConfig($data);
             $sanitized['dpGroupId'] = $configGroupId;
 
-            // Haupt-LineItem: das WD-Produkt selbst (Shopware-Staffel greift)
+            // Haupt-LineItem: das WD-Produkt selbst (Shopware-Staffel greift).
+            // Eindeutige ID im Factory-Aufruf, sonst nutzt ProductLineItemFactory einen
+            // deterministischen Hash → mehrfache Konfigurationen würden kollidieren.
             $lineItem = $this->lineItemFactory->create([
+                'id'           => Uuid::randomHex(),
                 'type'         => LineItem::PRODUCT_LINE_ITEM_TYPE,
                 'referencedId' => $product->getId(),
                 'quantity'     => $quantity,
             ], $context);
-            $lineItem->setId(Uuid::randomHex()); // Eindeutige ID → mehrere Konfigurationen desselben Produkts möglich
             $lineItem->setPayloadValue('dpDosenzauberConfig', $sanitized);
             $lineItem->setPayloadValue('dpGroupId', $configGroupId);
             $lineItem->setRemovable(true);
@@ -400,11 +402,11 @@ class DosenzauberController extends StorefrontController
                 continue;
             }
             $optItem = $this->lineItemFactory->create([
+                'id'           => Uuid::randomHex(),
                 'type'         => LineItem::PRODUCT_LINE_ITEM_TYPE,
                 'referencedId' => $optProduct->getId(),
                 'quantity'     => $add['qty'],
             ], $context);
-            $optItem->setId(Uuid::randomHex());
             $optItem->setPayloadValue('dpGroupId', $configGroupId);
             $optItem->setPayloadValue('dpDosenzauberOption', [
                 'baseProductNumber' => $baseProduct->getProductNumber(),

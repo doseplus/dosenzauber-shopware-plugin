@@ -150,31 +150,13 @@ HTML;
             $content = preg_replace('/<\/head>/i', $headDeps . "\n</head>", $content, 1);
         }
 
-        // Injection-Anker mit Fallback-Kette:
-        // 1. Direkt nach der VPE-Row (= unmittelbar unter den Artikel-Eigenschaften)
-        // 2. Vor .product-detail-contact (= vor "Sie haben Fragen"-Box)
-        // 3. Vor </body>
-        $injected = false;
-
-        // 1. Direkt nach VPE-Row injizieren — robuster Regex:
-        //    matched die ganze additional-information-row die "VPE:" enthält
-        $vpePattern = '/(<div\s+class="[^"]*\bproduct-detail-additional-information\b[^"]*"[^>]*>\s*<div[^>]*>\s*<strong>VPE:<\/strong>\s*<\/div>\s*<div[^>]*>[\s\S]*?<\/div>\s*<\/div>)/i';
-        if (preg_match($vpePattern, $content)) {
-            $content = preg_replace($vpePattern, '$1' . "\n" . $bodyContent, $content, 1);
-            $injected = true;
-        }
-
-        // 2. Fallback: vor .product-detail-contact
-        if (!$injected) {
-            $contactPattern = '/<div\s+class="[^"]*\bproduct-detail-contact\b[^"]*"/i';
-            if (preg_match($contactPattern, $content)) {
-                $content = preg_replace($contactPattern, $bodyContent . "\n" . '$0', $content, 1);
-                $injected = true;
-            }
-        }
-
-        // 3. Letzter Fallback: vor </body>
-        if (!$injected) {
+        // Injection vor .product-detail-contact ("Sie haben Fragen"-Box).
+        // Dort sitzt der Konfigurator in derselben col-lg-5 wie die Kontakt-Box,
+        // mit den Beschreibungs-Tabs als linke col-lg-7 daneben. Side-by-side Layout.
+        $contactPattern = '/<div\s+class="[^"]*\bproduct-detail-contact\b[^"]*"/i';
+        if (preg_match($contactPattern, $content)) {
+            $content = preg_replace($contactPattern, $bodyContent . "\n" . '$0', $content, 1);
+        } else {
             $content = preg_replace('/<\/body>/i', $bodyContent . "\n</body>", $content, 1);
         }
 
