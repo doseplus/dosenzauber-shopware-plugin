@@ -145,11 +145,24 @@ class ResponseSubscriber implements EventSubscriberInterface
 (function () {
     'use strict';
 
-    function buyArea() {
-        return document.querySelector('.product-detail-buy')
+    // Target: zwischen VPE/Artikel-Info und "Sie haben Fragen"-Box (.product-detail-contact)
+    // — Wenn vorhanden, wird der Konfigurator als sibling DAVOR eingefügt.
+    function findInjectionSpot() {
+        var contact = document.querySelector('.product-detail-contact');
+        if (contact && contact.parentNode) {
+            return { mode: 'before', node: contact };
+        }
+        var additional = document.querySelector('.product-detail-additional-information');
+        if (additional) {
+            return { mode: 'append', node: additional };
+        }
+        // Fallback: am Anfang der Buy-Sidebar
+        var buy = document.querySelector('.product-detail-buy')
             || document.querySelector('.product-detail-content-main')
             || document.querySelector('.product-detail-main')
             || document.querySelector('.product-detail');
+        if (buy) return { mode: 'prepend', node: buy };
+        return null;
     }
 
     function alreadyInjected() {
@@ -171,14 +184,21 @@ class ResponseSubscriber implements EventSubscriberInterface
         });
     }
 
-    function performInject(area) {
+    function performInject(spot) {
         var src = document.getElementById('dp-cfg-source');
         if (!src) return false;
 
         var wrapper = document.createElement('div');
         wrapper.className = 'dp-cfg-injected';
         wrapper.innerHTML = src.innerHTML;
-        area.insertBefore(wrapper, area.firstChild);
+
+        if (spot.mode === 'before') {
+            spot.node.parentNode.insertBefore(wrapper, spot.node);
+        } else if (spot.mode === 'append') {
+            spot.node.appendChild(wrapper);
+        } else {
+            spot.node.insertBefore(wrapper, spot.node.firstChild);
+        }
 
         // Inline-Scripts im Konfigurator-Template ausführen (window.dpDosenzauberCfg etc.)
         reExecuteScripts(wrapper);
@@ -226,14 +246,14 @@ class ResponseSubscriber implements EventSubscriberInterface
 
     function tryInjectWithRetries() {
         if (alreadyInjected()) return;
-        var area = buyArea();
-        if (area) { performInject(area); return; }
-        // Wenn buyArea noch nicht im DOM: wiederholt versuchen
+        var spot = findInjectionSpot();
+        if (spot) { performInject(spot); return; }
+        // Anker noch nicht im DOM: wiederholt versuchen
         [50, 150, 500, 1500, 3000].forEach(function (delay) {
             setTimeout(function () {
                 if (alreadyInjected()) return;
-                var a = buyArea();
-                if (a) performInject(a);
+                var s = findInjectionSpot();
+                if (s) performInject(s);
             }, delay);
         });
     }
