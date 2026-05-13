@@ -11,8 +11,13 @@ use Shopware\Core\Checkout\Cart\LineItemFactoryRegistry;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
 use Shopware\Core\Checkout\Promotion\Cart\PromotionItemBuilder;
 use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductEntity;
+use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
+use Shopware\Core\Checkout\Cart\Price\Struct\QuantityPriceDefinition;
+use Shopware\Core\Checkout\Cart\Tax\Struct\CalculatedTaxCollection;
+use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRuleCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Storefront\Controller\StorefrontController;
@@ -82,19 +87,32 @@ class DosenzauberController extends StorefrontController
 
             $cart = $this->cartService->getCart($context->getToken(), $context);
 
-            // LineItem ohne payload-Array bauen (zuverlässiger als 'payload' im factory-array)
+            // Konfigurations-Gruppen-ID, damit zusammengehörige LineItems später
+            // identifizierbar sind (z.B. wenn der User die Hauptposition löscht,
+            // sollen auch alle Options-Positionen gelöscht werden).
+            $configGroupId = Uuid::randomHex();
+            $sanitized = $this->sanitizeConfig($data);
+            $sanitized['dpGroupId'] = $configGroupId;
+
+            // Haupt-LineItem: das WD-Produkt selbst (Shopware-Staffel greift)
             $lineItem = $this->lineItemFactory->create([
                 'type'         => LineItem::PRODUCT_LINE_ITEM_TYPE,
                 'referencedId' => $product->getId(),
                 'quantity'     => $quantity,
             ], $context);
-
-            // Custom-Payload via setPayloadValue: überlebt Cart-Recalculate zuverlässig
-            $lineItem->setPayloadValue('dpDosenzauberConfig', $this->sanitizeConfig($data));
+            $lineItem->setId(Uuid::randomHex()); // Eindeutige ID → mehrere Konfigurationen desselben Produkts möglich
+            $lineItem->setPayloadValue('dpDosenzauberConfig', $sanitized);
+            $lineItem->setPayloadValue('dpGroupId', $configGroupId);
             $lineItem->setRemovable(true);
-            $lineItem->setStackable(false); // Verhindert dass zwei verschiedene Konfigurationen zu einer Position werden
+            $lineItem->setStackable(false);
 
             $cart = $this->cartService->add($cart, $lineItem, $context);
+
+            // Konfigurations-Optionen als CUSTOM-LineItems hinzufügen
+            $optionItems = $this->buildOptionLineItems($sanitized, $configGroupId, $context);
+            foreach ($optionItems as $optItem) {
+                $cart = $this->cartService->add($cart, $optItem, $context);
+            }
 
             // Promotion-Code an Shopware durchreichen (Weg A: native Promotion-Engine).
             // Shopware fügt den Placeholder hinzu, beim nächsten Recalculate prüft die
