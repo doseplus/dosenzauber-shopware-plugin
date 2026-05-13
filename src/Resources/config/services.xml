@@ -13,5 +13,15 @@
             <argument type="service" id="Doseplus\DosenzauberConfigurator\Service\ConfiguratorDataProvider"/>
             <tag name="kernel.event_subscriber"/>
         </service>
+
+        <service id="Doseplus\DosenzauberConfigurator\Storefront\Controller\DosenzauberController" public="true">
+            <argument type="service" id="Shopware\Core\Checkout\Cart\SalesChannel\CartService"/>
+            <argument type="service" id="Shopware\Core\Checkout\Cart\LineItemFactoryHandler\LineItemFactoryRegistry"/>
+            <argument type="service" id="sales_channel.product.repository"/>
+            <argument type="service" id="Doseplus\DosenzauberConfigurator\Service\ConfiguratorDataProvider"/>
+            <call method="setContainer">
+                <argument type="service" id="service_container"/>
+            </call>
+        </service>
     </services>
 </container>

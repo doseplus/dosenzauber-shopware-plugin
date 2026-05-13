@@ -407,9 +407,12 @@
 
                 <button type="button" @click="addToCart()" :disabled="busy"
                         class="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-black text-sm font-bold py-3 rounded transition flex items-center justify-center gap-2">
-                    <i data-lucide="shopping-cart" class="lucide w-4 h-4"></i>
-                    In den Warenkorb · <span x-text="`${quantity} Dosen`"></span>
+                    <i data-lucide="shopping-cart" class="lucide w-4 h-4" x-show="!busy"></i>
+                    <i data-lucide="loader-2" class="lucide w-4 h-4 animate-spin" x-show="busy" x-cloak></i>
+                    <span x-show="!busy">In den Warenkorb · <span x-text="`${quantity} Dosen`"></span></span>
+                    <span x-show="busy" x-cloak>Bitte warten…</span>
                 </button>
+                <p x-show="cartError" x-cloak x-text="cartError" class="text-[11px] text-red-400 mt-2 text-center"></p>
             </div>
 
             <p class="text-[10px] text-stone-500 text-center">
@@ -425,6 +428,7 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
         cfg: cfg,
         productImageFilled: productImageFilled || '',
         busy: false,
+        cartError: '',
         isDragging: false,
         logoFile: null,
         logoPreview: null,
@@ -563,8 +567,10 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
         removeLogo() { this.logoFile = null; this.logoPreview = null; },
 
         async addToCart() {
+            if (this.busy) return;
             this.busy = true;
-            // Konfigurations-Payload zusammenstellen
+            this.cartError = '';
+
             const payload = {
                 productNumber: this.cfg.productNumber,
                 quantity: this.quantity,
@@ -587,11 +593,52 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
                     karteText: this.karteVariant === 'persoenlich' ? this.karteText : null,
                 },
                 verpackung: this.verpackungVariant,
+                promo: this.promoApplied ? this.promo : null,
             };
-            console.log('[Dosenzauber] addToCart payload:', payload);
-            alert('Konfiguration (Demo): ' + JSON.stringify(payload, null, 2));
-            // TODO: POST /dosenzauber/add-to-cart mit Logo-Upload-Multipart
-            this.busy = false;
+
+            try {
+                // CSRF: Shopware 6.6 erkennt POSTs via XmlHttpRequest-Header — keine separaten Tokens nötig
+                const res = await fetch('/dosenzauber/add-to-cart', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!res.ok) {
+                    const errBody = await res.json().catch(() => ({}));
+                    throw new Error(errBody.error || ('HTTP ' + res.status));
+                }
+
+                const json = await res.json();
+                // Optional: Logo separat hochladen, bevor zum Warenkorb redirected wird
+                if (this.options[0].on && this.logoFile && json.lineItemId) {
+                    await this.uploadLogo(json.lineItemId).catch(() => {/* logo-upload nicht-kritisch */});
+                }
+
+                window.location.href = json.redirectUrl || '/checkout/cart';
+            } catch (e) {
+                console.error('[Dosenzauber] addToCart failed:', e);
+                this.cartError = 'Hinzufügen fehlgeschlagen. Bitte später erneut versuchen oder telefonisch bestellen.';
+                this.busy = false;
+            }
+        },
+
+        async uploadLogo(lineItemId) {
+            if (!this.logoFile) return;
+            const fd = new FormData();
+            fd.append('lineItemId', lineItemId);
+            fd.append('logo', this.logoFile);
+            await fetch('/dosenzauber/upload-logo', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd,
+            });
         },
     };
 };
