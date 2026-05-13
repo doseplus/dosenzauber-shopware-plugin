@@ -108,6 +108,9 @@ class DosenzauberController extends StorefrontController
             $lineItem->setRemovable(true);
             $lineItem->setStackable(true); // qty > 1 erlaubt; unique id verhindert Merge mit anderen Konfigs
 
+            // Beschreibendes Label für Admin-Sichtbarkeit
+            $lineItem->setLabel($this->buildConfigLabel($product->getProductNumber(), $sanitized));
+
             $cart = $this->cartService->add($cart, $lineItem, $context);
 
             // Konfigurations-Optionen als reale Shopware-Produkte hinzufügen
@@ -337,6 +340,62 @@ class DosenzauberController extends StorefrontController
         /** @var SalesChannelProductEntity|null $product */
         $product = $this->productRepository->search($criteria, $context)->first();
         return $product;
+    }
+
+    /**
+     * Baut ein beschreibendes Label aus der Konfiguration. Wird sichtbar im Admin
+     * unter Bestellungen → LineItem-Übersicht UND im Cart selbst. Damit Steffen die
+     * Konfiguration auf einen Blick sieht, ohne in Payload-JSON wühlen zu müssen.
+     */
+    private function buildConfigLabel(string $productNumber, array $cfg): string
+    {
+        $parts = [];
+        $opt   = $cfg['options']  ?? [];
+        $laser = $cfg['laser']    ?? [];
+        $fuell = $cfg['fuellung'] ?? [];
+
+        // Header: WD-Nummer + DZ-Nummer falls anders
+        $dzNum = (string)($cfg['productNumber'] ?? '');
+        $parts[] = $productNumber . ($dzNum && $dzNum !== $productNumber ? " ($dzNum)" : '');
+
+        // Lasergravur
+        if (!empty($opt['laser'])) {
+            $laserBits = ['Lasergravur'];
+            if (!empty($laser['personalisierung'])) $laserBits[] = 'pers.';
+            if (!empty($laser['logoFileName']))     $laserBits[] = 'Logo:' . $laser['logoFileName'];
+            $parts[] = implode(' ', $laserBits);
+        }
+
+        // Befüllung
+        if (!empty($opt['fuellung'])) {
+            $riegel = (int)($fuell['riegelProDose'] ?? 0);
+            $fuellBits = ['Befüllung ' . $riegel . '× RSW'];
+            $karteVar = (string)($fuell['karteVariant'] ?? 'standard');
+            if ($karteVar === 'persoenlich') {
+                $text = (string)($fuell['karteText'] ?? '');
+                $fuellBits[] = 'Karte mit pers. Text';
+                if ($text !== '') {
+                    $short = mb_substr($text, 0, 50);
+                    $fuellBits[] = '"' . $short . (mb_strlen($text) > 50 ? '…' : '') . '"';
+                }
+            } else {
+                $fuellBits[] = 'Karte: Dosenmotiv';
+            }
+            $parts[] = implode(' ', $fuellBits);
+        }
+
+        // Verpackung
+        if (!empty($opt['verpackung'])) {
+            $verp = (string)($cfg['verpackung'] ?? 'plano');
+            $parts[] = 'Verp. ' . $verp;
+        }
+
+        // Promo
+        if (!empty($cfg['promo']['code'])) {
+            $parts[] = 'Promo:' . $cfg['promo']['code'];
+        }
+
+        return implode(' · ', $parts);
     }
 
     /**

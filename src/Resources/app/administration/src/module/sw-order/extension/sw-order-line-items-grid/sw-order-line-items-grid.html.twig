@@ -1,0 +1,86 @@
+{% block sw_order_line_items_grid_grid %}
+    {% parent %}
+
+    {# Dosenzauber-Konfigurations-Block PRO Bestellung #}
+    <div v-if="order && order.lineItems"
+         class="dp-cfg-admin-block">
+        <template v-for="(item, idx) in order.lineItems" :key="'dpcfg-' + idx">
+            <div v-if="hasDosenzauberConfig(item)" class="dp-cfg-admin-card">
+                <h3>
+                    <sw-icon name="regular-tools" small></sw-icon>
+                    Dosenzauber-Konfiguration: {{ item.label }}
+                </h3>
+
+                <div class="dp-cfg-admin-row">
+                    <strong>Produkt-Nr.:</strong>
+                    <span>{{ dpConfig(item).productNumber }}</span>
+                </div>
+
+                <div class="dp-cfg-admin-row">
+                    <strong>Stückzahl:</strong>
+                    <span>{{ dpConfig(item).quantity }} Dosen (Staffel: {{ dpConfig(item).staffel }})</span>
+                </div>
+
+                <div class="dp-cfg-admin-row">
+                    <strong>Stückpreis:</strong>
+                    <span>{{ dpConfig(item).stueckpreis }} € · Gesamt {{ dpConfig(item).gesamt }} €</span>
+                </div>
+
+                <hr>
+
+                {# Lasergravur #}
+                <div v-if="dpConfig(item).options && dpConfig(item).options.laser" class="dp-cfg-admin-section">
+                    <h4>🔥 Lasergravur</h4>
+                    <div class="dp-cfg-admin-row">
+                        <strong>Personalisierung:</strong>
+                        <span>{{ dpConfig(item).laser.personalisierung ? 'JA · +90,00 €' : 'nein' }}</span>
+                    </div>
+                    <div v-if="dpLogoUrl(item)" class="dp-cfg-admin-row">
+                        <strong>Logo:</strong>
+                        <span>
+                            <a :href="dpLogoUrl(item)" target="_blank">{{ dpLogoFileName(item) }}</a>
+                        </span>
+                    </div>
+                    <div v-if="dpLogoUrl(item)" class="dp-cfg-admin-logo-preview">
+                        <img :src="dpLogoUrl(item)" :alt="dpLogoFileName(item)">
+                    </div>
+                </div>
+
+                {# Befüllung #}
+                <div v-if="dpConfig(item).options && dpConfig(item).options.fuellung" class="dp-cfg-admin-section">
+                    <h4>🍫 Befüllung Ritter Sport</h4>
+                    <div class="dp-cfg-admin-row">
+                        <strong>Riegel pro Dose:</strong>
+                        <span>{{ dpConfig(item).fuellung.riegelProDose }}</span>
+                    </div>
+                    <div class="dp-cfg-admin-row">
+                        <strong>Grußkarte:</strong>
+                        <span>{{ dpConfig(item).fuellung.karteVariant === 'persoenlich' ? 'mit persönlichem Text (+125 €)' : 'Karte mit Dosenmotiv (inkl.)' }}</span>
+                    </div>
+                    <div v-if="dpConfig(item).fuellung.karteText" class="dp-cfg-admin-row dp-cfg-admin-karte-text">
+                        <strong>Karten-Text:</strong>
+                        <blockquote>{{ dpConfig(item).fuellung.karteText }}</blockquote>
+                    </div>
+                </div>
+
+                {# Verpackung #}
+                <div v-if="dpConfig(item).options && dpConfig(item).options.verpackung" class="dp-cfg-admin-section">
+                    <h4>📦 Versandverpackung</h4>
+                    <div class="dp-cfg-admin-row">
+                        <strong>Variante:</strong>
+                        <span>{{ dpConfig(item).verpackung === 'konfektioniert' ? 'Komplett konfektioniert (1,19 €/Dose)' : 'Plano beigelegt (0,98 €/Dose)' }}</span>
+                    </div>
+                </div>
+
+                {# Promo-Code #}
+                <div v-if="dpConfig(item).promo && dpConfig(item).promo.code" class="dp-cfg-admin-section">
+                    <h4>🎟️ Rabattcode</h4>
+                    <div class="dp-cfg-admin-row">
+                        <strong>Code:</strong>
+                        <span>{{ dpConfig(item).promo.code }} · {{ dpConfig(item).promo.label }}</span>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+{% endblock %}
