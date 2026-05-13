@@ -108,11 +108,9 @@ class DosenzauberController extends StorefrontController
 
             $cart = $this->cartService->add($cart, $lineItem, $context);
 
-            // Konfigurations-Optionen als CUSTOM-LineItems hinzufügen
-            $optionItems = $this->buildOptionLineItems($sanitized, $configGroupId, $context);
-            foreach ($optionItems as $optItem) {
-                $cart = $this->cartService->add($cart, $optItem, $context);
-            }
+            // Konfigurations-Optionen als reale Shopware-Produkte hinzufügen
+            // (NK_RSW, NK_UV_PLANO/KONF, NK_LG, NK_LG_MASCHINE, NK_PERS, NK_KARTE_TEXT)
+            $cart = $this->addOptionProducts($cart, $sanitized, $product, $quantity, $configGroupId, $context);
 
             // Promotion-Code an Shopware durchreichen (Weg A: native Promotion-Engine).
             // Shopware fügt den Placeholder hinzu, beim nächsten Recalculate prüft die
@@ -337,6 +335,87 @@ class DosenzauberController extends StorefrontController
         /** @var SalesChannelProductEntity|null $product */
         $product = $this->productRepository->search($criteria, $context)->first();
         return $product;
+    }
+
+    /**
+     * Fügt die Konfigurations-Optionen als reale Shopware-Produkte zum Cart hinzu.
+     *
+     * Optionen mit Mengen-Faktor (× DZ-Quantity):
+     *   - NK_LG (Lasergravur)                            wenn options.laser
+     *   - NK_RSW (Ritter Sport)        × riegelProDose   wenn options.fuellung
+     *   - NK_UV_PLANO / NK_UV_KONF                       wenn options.verpackung
+     *
+     * Einmalkosten (qty = 1):
+     *   - NK_LG_MASCHINE                                 wenn options.laser
+     *   - NK_PERS                                        wenn options.laser + laser.personalisierung
+     *   - NK_KARTE_TEXT                                  wenn options.fuellung + fuellung.karteVariant=persoenlich
+     */
+    private function addOptionProducts(
+        \Shopware\Core\Checkout\Cart\Cart $cart,
+        array $cfg,
+        SalesChannelProductEntity $baseProduct,
+        int $quantity,
+        string $configGroupId,
+        SalesChannelContext $context
+    ): \Shopware\Core\Checkout\Cart\Cart {
+        $options = $cfg['options'] ?? [];
+        $laser   = $cfg['laser'] ?? [];
+        $fuell   = $cfg['fuellung'] ?? [];
+
+        $additions = [];
+
+        // Lasergravur · pro Dose
+        if (!empty($options['laser'])) {
+            $additions[] = ['number' => 'NK_LG', 'qty' => $quantity, 'label' => 'Lasergravur'];
+            // Maschinenrüstung einmalig
+            $additions[] = ['number' => 'NK_LG_MASCHINE', 'qty' => 1, 'label' => 'Maschinenrüstung Laser'];
+            if (!empty($laser['personalisierung'])) {
+                $additions[] = ['number' => 'NK_PERS', 'qty' => 1, 'label' => 'Personalisierung'];
+            }
+        }
+
+        // Ritter Sport · pro Dose × Riegel pro Dose
+        if (!empty($options['fuellung'])) {
+            $riegel = max(0, (int)($fuell['riegelProDose'] ?? 0));
+            if ($riegel > 0) {
+                $additions[] = ['number' => 'NK_RSW', 'qty' => $quantity * $riegel, 'label' => 'Ritter Sport Mini'];
+            }
+            // Karte mit persönlichem Text einmalig
+            if (($fuell['karteVariant'] ?? '') === 'persoenlich') {
+                $additions[] = ['number' => 'NK_KARTE_TEXT', 'qty' => 1, 'label' => 'Karte mit pers. Text'];
+            }
+        }
+
+        // Versandverpackung · pro Dose
+        if (!empty($options['verpackung'])) {
+            $verp = (string)($cfg['verpackung'] ?? 'plano');
+            $verpNumber = $verp === 'konfektioniert' ? 'NK_UV_KONF' : 'NK_UV_PLANO';
+            $additions[] = ['number' => $verpNumber, 'qty' => $quantity, 'label' => 'Versandverpackung ' . ucfirst($verp)];
+        }
+
+        foreach ($additions as $add) {
+            $optProduct = $this->loadProductByNumber($add['number'], $context);
+            if ($optProduct === null) {
+                $this->logger->warning('Dosenzauber: Option-Produkt nicht gefunden', ['number' => $add['number']]);
+                continue;
+            }
+            $optItem = $this->lineItemFactory->create([
+                'type'         => LineItem::PRODUCT_LINE_ITEM_TYPE,
+                'referencedId' => $optProduct->getId(),
+                'quantity'     => $add['qty'],
+            ], $context);
+            $optItem->setId(Uuid::randomHex());
+            $optItem->setPayloadValue('dpGroupId', $configGroupId);
+            $optItem->setPayloadValue('dpDosenzauberOption', [
+                'baseProductNumber' => $baseProduct->getProductNumber(),
+                'baseLabel'         => $add['label'],
+            ]);
+            $optItem->setRemovable(true);
+            $optItem->setStackable(false);
+            $cart = $this->cartService->add($cart, $optItem, $context);
+        }
+
+        return $cart;
     }
 
     /**
