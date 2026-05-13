@@ -38,8 +38,8 @@ class CartOverviewController
             $rows = $this->connection->fetchAllAssociative(
                 'SELECT token, payload, compressed, customer_id, sales_channel_id, created_at, updated_at, price, line_item_count
                  FROM cart
-                 WHERE updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-                 ORDER BY updated_at DESC
+                 WHERE COALESCE(updated_at, created_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                 ORDER BY COALESCE(updated_at, created_at) DESC
                  LIMIT :limit',
                 ['limit' => $limit],
                 ['limit' => \PDO::PARAM_INT]
