@@ -22,6 +22,11 @@
             <tag name="kernel.event_subscriber"/>
         </service>
 
+        <service id="Doseplus\DosenzauberConfigurator\Administration\Controller\CartOverviewController" public="true">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Psr\Log\LoggerInterface"/>
+        </service>
+
         <service id="Doseplus\DosenzauberConfigurator\Storefront\Controller\DosenzauberController" public="true">
             <argument type="service" id="Shopware\Core\Checkout\Cart\SalesChannel\CartService"/>
             <argument type="service" id="Shopware\Core\Checkout\Cart\LineItemFactoryRegistry"/>
