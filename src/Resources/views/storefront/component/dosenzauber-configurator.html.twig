@@ -586,6 +586,7 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             this.cartError = '';
 
             const payload = {
+                productId: this.cfg.productId,
                 productNumber: this.cfg.productNumber,
                 quantity: this.quantity,
                 gesamt: this.calcGesamt(),

@@ -52,16 +52,27 @@ class DosenzauberController extends StorefrontController
                 return new JsonResponse(['ok' => false, 'error' => 'Invalid JSON payload'], 400);
             }
 
+            $productId     = trim((string)($data['productId'] ?? ''));
             $productNumber = trim((string)($data['productNumber'] ?? ''));
             $quantity      = max(1, (int)($data['quantity'] ?? 0));
 
-            if ($productNumber === '') {
-                return new JsonResponse(['ok' => false, 'error' => 'productNumber missing'], 400);
+            if ($productId === '' && $productNumber === '') {
+                return new JsonResponse(['ok' => false, 'error' => 'productId/productNumber missing'], 400);
             }
 
-            $product = $this->loadProductByNumber($productNumber, $context);
+            // Bevorzugt per ID laden (eindeutig), Fallback per Number
+            $product = null;
+            if ($productId !== '') {
+                $product = $this->loadProductById($productId, $context);
+            }
+            if ($product === null && $productNumber !== '') {
+                $product = $this->loadProductByNumber($productNumber, $context);
+            }
             if ($product === null) {
-                $this->logger->warning('Dosenzauber Cart-Add: Produkt nicht gefunden', ['productNumber' => $productNumber]);
+                $this->logger->warning('Dosenzauber Cart-Add: Produkt nicht gefunden', [
+                    'productId'     => $productId,
+                    'productNumber' => $productNumber,
+                ]);
                 return new JsonResponse(['ok' => false, 'error' => 'Produkt nicht gefunden'], 404);
             }
 
@@ -297,6 +308,14 @@ class DosenzauberController extends StorefrontController
         $criteria = (new Criteria())->addFilter(new EqualsFilter('productNumber', $number));
         $criteria->setLimit(1);
 
+        /** @var SalesChannelProductEntity|null $product */
+        $product = $this->productRepository->search($criteria, $context)->first();
+        return $product;
+    }
+
+    private function loadProductById(string $id, SalesChannelContext $context): ?SalesChannelProductEntity
+    {
+        $criteria = new Criteria([$id]);
         /** @var SalesChannelProductEntity|null $product */
         $product = $this->productRepository->search($criteria, $context)->first();
         return $product;

@@ -130,149 +130,44 @@ class ResponseSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $injection = <<<HTML
-<!-- Dosenzauber-Konfigurator: Dependencies + Template + Injection-Loader -->
+        // CDN-Dependencies vor </head>, Konfigurator-HTML direkt vor .product-detail-contact.
+        // Keine Template-Tags, kein JS-Injection — Alpine bindet selbst on load.
+        $headDeps = <<<HTML
+
+<!-- Dosenzauber-Konfigurator: CDN-Dependencies -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js" defer></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-
-<template id="dp-cfg-source">{$configuratorHtml}</template>
-
-<script>
-(function () {
-    'use strict';
-
-    // Target: zwischen VPE/Artikel-Info und "Sie haben Fragen"-Box (.product-detail-contact)
-    // — Wenn vorhanden, wird der Konfigurator als sibling DAVOR eingefügt.
-    function findInjectionSpot() {
-        var contact = document.querySelector('.product-detail-contact');
-        if (contact && contact.parentNode) {
-            return { mode: 'before', node: contact };
-        }
-        var additional = document.querySelector('.product-detail-additional-information');
-        if (additional) {
-            return { mode: 'append', node: additional };
-        }
-        // Fallback: am Anfang der Buy-Sidebar
-        var buy = document.querySelector('.product-detail-buy')
-            || document.querySelector('.product-detail-content-main')
-            || document.querySelector('.product-detail-main')
-            || document.querySelector('.product-detail');
-        if (buy) return { mode: 'prepend', node: buy };
-        return null;
-    }
-
-    function alreadyInjected() {
-        return !!document.querySelector('.dp-cfg-injected');
-    }
-
-    // <script>-Tags die via innerHTML kopiert wurden, EXECUTEN nicht.
-    // Diese Funktion klont sie als neue Elemente, dann führt der Browser sie aus.
-    function reExecuteScripts(root) {
-        var scripts = root.querySelectorAll('script');
-        scripts.forEach(function (oldScript) {
-            var newScript = document.createElement('script');
-            for (var i = 0; i < oldScript.attributes.length; i++) {
-                var a = oldScript.attributes[i];
-                newScript.setAttribute(a.name, a.value);
-            }
-            newScript.textContent = oldScript.textContent;
-            oldScript.parentNode.replaceChild(newScript, oldScript);
-        });
-    }
-
-    function performInject(spot) {
-        var src = document.getElementById('dp-cfg-source');
-        if (!src) return false;
-
-        var wrapper = document.createElement('div');
-        wrapper.className = 'dp-cfg-injected';
-        wrapper.innerHTML = src.innerHTML;
-
-        if (spot.mode === 'before') {
-            spot.node.parentNode.insertBefore(wrapper, spot.node);
-        } else if (spot.mode === 'append') {
-            spot.node.appendChild(wrapper);
-        } else {
-            spot.node.insertBefore(wrapper, spot.node.firstChild);
-        }
-
-        // Inline-Scripts im Konfigurator-Template ausführen (window.dpDosenzauberCfg etc.)
-        reExecuteScripts(wrapper);
-
-        // Alpine.js anwenden — sobald geladen
-        function applyAlpine() {
-            if (window.Alpine && typeof window.Alpine.initTree === 'function') {
-                try { window.Alpine.initTree(wrapper); } catch (e) { console.error('[Dosenzauber] Alpine.initTree fail:', e); }
-                return true;
-            }
-            return false;
-        }
-
-        if (!applyAlpine()) {
-            // Alpine noch nicht geladen — auf 'alpine:init'-Event warten oder pollen
-            document.addEventListener('alpine:initialized', function onInit() {
-                document.removeEventListener('alpine:initialized', onInit);
-                applyAlpine();
-            });
-            var attempts = 0;
-            var poller = setInterval(function () {
-                attempts++;
-                if (applyAlpine() || attempts > 50) clearInterval(poller);
-            }, 100);
-        }
-
-        // Lucide-Icons rendern
-        function applyLucide() {
-            if (window.lucide && typeof window.lucide.createIcons === 'function') {
-                try { window.lucide.createIcons(); } catch (e) {}
-                return true;
-            }
-            return false;
-        }
-        if (!applyLucide()) {
-            var lucideAttempts = 0;
-            var lucidePoller = setInterval(function () {
-                lucideAttempts++;
-                if (applyLucide() || lucideAttempts > 50) clearInterval(lucidePoller);
-            }, 100);
-        }
-
-        return true;
-    }
-
-    function tryInjectWithRetries() {
-        if (alreadyInjected()) return;
-        var spot = findInjectionSpot();
-        if (spot) { performInject(spot); return; }
-        // Anker noch nicht im DOM: wiederholt versuchen
-        [50, 150, 500, 1500, 3000].forEach(function (delay) {
-            setTimeout(function () {
-                if (alreadyInjected()) return;
-                var s = findInjectionSpot();
-                if (s) performInject(s);
-            }, delay);
-        });
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', tryInjectWithRetries);
-    } else {
-        tryInjectWithRetries();
-    }
-})();
-</script>
 HTML;
 
-        $content = preg_replace(
-            '/<\/body>/i',
-            $injection . '</body>',
-            $content,
-            1
-        );
+        $bodyContent = '<div class="dp-cfg-injected">' . $configuratorHtml . '</div>';
+
+        // Dependencies vor </head> einfügen
+        if (stripos($content, '</head>') !== false) {
+            $content = preg_replace('/<\/head>/i', $headDeps . "\n</head>", $content, 1);
+        }
+
+        // Konfigurator-HTML direkt VOR .product-detail-contact einfügen.
+        // Fallback: vor </body> falls .product-detail-contact nicht vorhanden.
+        $contactPattern = '/<div\s+class="[^"]*\bproduct-detail-contact\b[^"]*"/i';
+        if (preg_match($contactPattern, $content)) {
+            $content = preg_replace(
+                $contactPattern,
+                $bodyContent . "\n" . '$0',
+                $content,
+                1
+            );
+        } else {
+            $content = preg_replace(
+                '/<\/body>/i',
+                $bodyContent . "\n</body>",
+                $content,
+                1
+            );
+        }
 
         $response->setContent($content);
 
