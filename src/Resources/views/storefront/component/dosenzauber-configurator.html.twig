@@ -49,7 +49,7 @@
 {# Stage/Live-kompatibler Base-Path für API-Routes (z.B. /dpstage/dosenzauber/add-to-cart) #}
 <script>window.dpDosenzauberBasePath = "{{ app.request.basePath|default('') }}";</script>
 
-<div class="dp-cfg mt-2 mb-4"
+<div class="dp-cfg mb-4"
      x-data='dpDosenzauberCfg({{ cfg|json_encode|raw }}, {{ productImageFilled|json_encode|raw }})'
      x-init="$nextTick(() => { initSliders(); if (typeof lucide !== 'undefined') lucide.createIcons(); })">
 
