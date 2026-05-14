@@ -488,19 +488,14 @@ class DosenzauberController extends StorefrontController
             $optItem->setPayloadValue('dpDosenzauberOption', [
                 'baseProductNumber' => $baseProduct->getProductNumber(),
                 'baseLabel'         => $add['label'],
+                'productNumber'     => $add['number'],  // für AutoScaleProcessor
             ]);
             // Option-LineItems sind im Cart NICHT einzeln änderbar (Steffen Anger):
-            // Sie sind an die Hauptposition gebunden — wenn der Kunde die Konfiguration
-            // ändern will, muss er neu konfigurieren.
+            // setRemovable(false) verhindert das × in der UI. Quantity-Buttons
+            // werden via Twig-Override quantity.html.twig versteckt. KEINE
+            // QuantityInformation min=max mehr — das verursachte Cart-Update-Errors.
             $optItem->setRemovable(false);
             $optItem->setStackable(true);
-
-            // Quantity-Buttons im Storefront ausgrauen via QuantityInformation min=max
-            $qi = new \Shopware\Core\Checkout\Cart\LineItem\QuantityInformation();
-            $qi->setMinPurchase($add['qty']);
-            $qi->setMaxPurchase($add['qty']);
-            $qi->setPurchaseSteps($add['qty']);
-            $optItem->setQuantityInformation($qi);
             $cart = $this->cartService->add($cart, $optItem, $context);
         }
 

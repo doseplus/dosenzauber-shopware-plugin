@@ -26,6 +26,10 @@
             <tag name="shopware.cart.processor" priority="500"/>
         </service>
 
+        <service id="Doseplus\DosenzauberConfigurator\Cart\AutoScaleProcessor">
+            <tag name="shopware.cart.processor" priority="600"/>
+        </service>
+
         <service id="Doseplus\DosenzauberConfigurator\Administration\Controller\CartOverviewController" public="true">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="Psr\Log\LoggerInterface"/>
