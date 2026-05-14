@@ -130,14 +130,24 @@ class DosenzauberController extends StorefrontController
                     $promotionItem = (new PromotionItemBuilder())->buildPlaceholderItem($promoCode);
                     $cart = $this->cartService->add($cart, $promotionItem, $context);
 
-                    // Erste Wahrheit: Shopware schreibt bei ungültigem Code einen Error in den Cart
+                    // Shopware schreibt bei ungültigem Code einen Error in den Cart,
+                    // aber bei erfolgreichem Code ein Notice ("Discount X has been added") —
+                    // beide müssen unterschieden werden über getLevel() bzw. den Key.
                     $cartErrors = $cart->getErrors()->getElements();
                     $foundPromoError = false;
                     foreach ($cartErrors as $err) {
                         /** @var Error $err */
                         $key = method_exists($err, 'getMessageKey') ? $err->getMessageKey() : '';
                         $params = method_exists($err, 'getParameters') ? $err->getParameters() : [];
-                        // Shopware errors: "promotion-not-found", "promotion-not-eligible", "promotion-already-placed-in-cart"
+                        $level = method_exists($err, 'getLevel') ? $err->getLevel() : 0;
+
+                        // Level 0=NOTICE/INFO, 10=WARNING, 20=ERROR. Nur ERROR ist ein Problem.
+                        if ($level < 20) {
+                            continue;
+                        }
+
+                        // Echte Fehler-Keys: "promotion-not-found", "promotion-not-eligible",
+                        // "promotion-already-placed-in-cart", etc. — alle ENDEN nicht mit "added".
                         if (str_contains($key, 'promotion') && (
                             ($params['code'] ?? null) === $promoCode || str_contains((string)$err->getMessage(), $promoCode)
                         )) {
