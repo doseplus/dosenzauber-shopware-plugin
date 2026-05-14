@@ -1,0 +1,22 @@
+{# Override für Dosenzauber-Option-LineItems:
+   Wenn der LineItem ein dpDosenzauberOption-Payload hat (= NK_*-Begleitprodukt),
+   wird die Mengenauswahl ausgeblendet und nur die Menge als Text angezeigt.
+   Hauptprodukt (WD-Dose) bleibt normal änderbar. #}
+
+{% sw_extends '@Storefront/storefront/component/line-item/element/quantity.html.twig' %}
+
+{% block component_line_item_quantity_select_wrapper %}
+    {% if lineItem.payload.dpDosenzauberOption is defined %}
+        <div class="line-item-quantity-select-wrapper">
+            <span class="line-item-quantity-display"
+                  style="display:inline-block; padding:6px 12px; background:#f5f5f5; border:1px solid #e5e5e5; border-radius:4px; font-weight:600; color:#4d5452;">
+                {{ lineItem.quantity }} Stk.
+            </span>
+            <small class="text-muted d-block mt-1" style="font-size:11px;">
+                an Konfiguration gebunden
+            </small>
+        </div>
+    {% else %}
+        {{ parent() }}
+    {% endif %}
+{% endblock %}
