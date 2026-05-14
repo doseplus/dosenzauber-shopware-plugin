@@ -202,6 +202,58 @@ class DosenzauberController extends StorefrontController
     }
 
     /**
+     * Entfernt eine komplette Dosenzauber-Konfiguration aus dem Cart:
+     * das Haupt-WD-Produkt + alle NK_*-Optionen mit derselben dpGroupId.
+     */
+    #[Route(
+        path: '/dosenzauber/remove-config/{lineItemId}',
+        name: 'frontend.dosenzauber.remove-config',
+        methods: ['POST'],
+        defaults: ['XmlHttpRequest' => true, '_routeScope' => ['storefront']]
+    )]
+    public function removeConfig(string $lineItemId, Request $request, SalesChannelContext $context): \Symfony\Component\HttpFoundation\Response
+    {
+        try {
+            $cart = $this->cartService->getCart($context->getToken(), $context);
+            $mainItem = $cart->getLineItems()->get($lineItemId);
+
+            if ($mainItem !== null) {
+                $payload = $mainItem->getPayload();
+                $groupId = $payload['dpGroupId'] ?? null;
+
+                // Alle LineItem-IDs der Gruppe sammeln (Haupt + Optionen)
+                $idsToRemove = [$lineItemId];
+                if ($groupId) {
+                    foreach ($cart->getLineItems() as $li) {
+                        if ($li->getId() === $lineItemId) continue;
+                        $liPayload = $li->getPayload();
+                        if (($liPayload['dpGroupId'] ?? null) === $groupId) {
+                            $idsToRemove[] = $li->getId();
+                        }
+                    }
+                }
+
+                // Removable temporär zurücksetzen, damit cart->remove() funktioniert
+                foreach ($idsToRemove as $id) {
+                    $li = $cart->getLineItems()->get($id);
+                    if ($li) {
+                        $li->setRemovable(true);
+                        $cart->remove($id);
+                    }
+                }
+
+                $this->cartService->recalculate($cart, $context);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('Dosenzauber removeConfig fail', ['err' => $e->getMessage()]);
+        }
+
+        // Redirect zurück zur Cart-Seite (oder Referer)
+        $referer = $request->headers->get('referer') ?? '/checkout/cart';
+        return new \Symfony\Component\HttpFoundation\RedirectResponse($referer);
+    }
+
+    /**
      * Logo-Upload: speichert die hochgeladene Datei und verknüpft sie via Payload-Update
      * mit dem zuvor angelegten LineItem. Akzeptiert PNG/JPG/SVG/PDF bis 5 MB.
      */
