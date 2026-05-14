@@ -437,11 +437,11 @@ class DosenzauberController extends StorefrontController
 
         // Lasergravur · pro Dose
         if (!empty($options['laser'])) {
-            $additions[] = ['number' => 'NK_LG', 'qty' => $quantity, 'label' => 'Lasergravur'];
+            $additions[] = ['number' => 'NK LG', 'qty' => $quantity, 'label' => 'Lasergravur'];
             // Maschinenrüstung einmalig
-            $additions[] = ['number' => 'NK_LG_MASCHINE', 'qty' => 1, 'label' => 'Maschinenrüstung Laser'];
+            $additions[] = ['number' => 'NK LG Maschinenrüstung', 'qty' => 1, 'label' => 'Maschinenrüstung Laser'];
             if (!empty($laser['personalisierung'])) {
-                $additions[] = ['number' => 'NK_PERS', 'qty' => 1, 'label' => 'Personalisierung'];
+                $additions[] = ['number' => 'NK PERS', 'qty' => 1, 'label' => 'Personalisierung'];
             }
         }
 
@@ -449,19 +449,27 @@ class DosenzauberController extends StorefrontController
         if (!empty($options['fuellung'])) {
             $riegel = max(0, (int)($fuell['riegelProDose'] ?? 0));
             if ($riegel > 0) {
-                $additions[] = ['number' => 'NK_RSW', 'qty' => $quantity * $riegel, 'label' => 'Ritter Sport Mini'];
+                $additions[] = ['number' => 'RSW', 'qty' => $quantity * $riegel, 'label' => 'Ritter Sport Mini'];
             }
             // Karte mit persönlichem Text einmalig
             if (($fuell['karteVariant'] ?? '') === 'persoenlich') {
-                $additions[] = ['number' => 'NK_KARTE_TEXT', 'qty' => 1, 'label' => 'Karte mit pers. Text'];
+                $additions[] = ['number' => 'NK Karte', 'qty' => 1, 'label' => 'Karte mit pers. Text'];
             }
         }
 
-        // Versandverpackung · pro Dose
+        // Versandverpackung · pro Dose, UV-Code je nach Dose-Größe (aus dataProvider)
         if (!empty($options['verpackung'])) {
             $verp = (string)($cfg['verpackung'] ?? 'plano');
-            $verpNumber = $verp === 'konfektioniert' ? 'NK_UV_KONF' : 'NK_UV_PLANO';
-            $additions[] = ['number' => $verpNumber, 'qty' => $quantity, 'label' => 'Versandverpackung ' . ucfirst($verp)];
+            $dpData = $this->dataProvider->getDataForProduct($baseProduct);
+            $uvNumber = (string)($dpData['uvNumber'] ?? '');
+            if ($uvNumber !== '') {
+                $variant = $verp === 'konfektioniert' ? 'konfektioniert' : 'plano';
+                $additions[] = [
+                    'number' => $uvNumber . ' ' . $variant,
+                    'qty'    => $quantity,
+                    'label'  => 'Versandverpackung ' . ucfirst($verp) . ' (' . $uvNumber . ')',
+                ];
+            }
         }
 
         foreach ($additions as $add) {
