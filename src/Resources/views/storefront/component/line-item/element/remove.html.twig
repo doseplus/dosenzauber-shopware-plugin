@@ -1,0 +1,13 @@
+{# Override für Dosenzauber-LineItems: × Knopf ausblenden für Items die zur
+   Konfiguration gehören (Hauptprodukt + Optionen). Konfigurierte Pakete
+   können nur als Ganzes via separatem Mechanismus entfernt werden. #}
+
+{% sw_extends '@Storefront/storefront/component/line-item/element/remove.html.twig' %}
+
+{% block component_line_item_remove %}
+    {% if lineItem.payload.dpDosenzauberConfig is defined or lineItem.payload.dpDosenzauberOption is defined %}
+        {# Kein × — Konfigurations-LineItem nicht einzeln entfernbar #}
+    {% else %}
+        {{ parent() }}
+    {% endif %}
+{% endblock %}
