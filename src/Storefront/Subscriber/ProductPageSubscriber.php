@@ -26,14 +26,8 @@ class ProductPageSubscriber implements EventSubscriberInterface
             return;
         }
 
-        // Login-Gate: nur eingeloggte Kunden sehen den Konfigurator.
-        // Steffen Anger 2026-05-13: "nur nach Anmeldung soll der Konfigurator
-        // sichtbar sein". Gäste sehen die Produktseite ohne Konfigurator.
-        $customer = $event->getSalesChannelContext()->getCustomer();
-        if ($customer === null) {
-            $event->getPage()->assign(['dpDosenzauberActive' => false]);
-            return;
-        }
+        // Login-Gate entfernt: B2B-Plugin existiert nur auf Stage, nicht Live.
+        // Auf Live sind Preise und Konfigurator für alle sichtbar.
 
         $data = $this->dataProvider->getDataForProduct($product);
 

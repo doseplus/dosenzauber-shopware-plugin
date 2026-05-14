@@ -77,11 +77,7 @@ class ResponseSubscriber implements EventSubscriberInterface
             return;
         }
 
-        // Login-Gate: nur eingeloggte Kunden sehen den Konfigurator.
-        $customer = $event->getSalesChannelContext()->getCustomer();
-        if ($customer === null) {
-            return;
-        }
+        // Login-Gate entfernt: auf Live gibt es kein B2B-Plugin, Konfigurator für alle sichtbar.
 
         $data = $this->dataProvider->getDataForProduct($product);
         if ($data === null) {
