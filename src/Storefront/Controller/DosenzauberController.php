@@ -481,8 +481,18 @@ class DosenzauberController extends StorefrontController
                 'baseProductNumber' => $baseProduct->getProductNumber(),
                 'baseLabel'         => $add['label'],
             ]);
-            $optItem->setRemovable(true);
+            // Option-LineItems sind im Cart NICHT einzeln änderbar (Steffen Anger):
+            // Sie sind an die Hauptposition gebunden — wenn der Kunde die Konfiguration
+            // ändern will, muss er neu konfigurieren.
+            $optItem->setRemovable(false);
             $optItem->setStackable(true);
+
+            // Quantity-Buttons im Storefront ausgrauen via QuantityInformation min=max
+            $qi = new \Shopware\Core\Checkout\Cart\LineItem\QuantityInformation();
+            $qi->setMinPurchase($add['qty']);
+            $qi->setMaxPurchase($add['qty']);
+            $qi->setPurchaseSteps($add['qty']);
+            $optItem->setQuantityInformation($qi);
             $cart = $this->cartService->add($cart, $optItem, $context);
         }
 
