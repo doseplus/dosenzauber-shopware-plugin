@@ -105,7 +105,10 @@ class DosenzauberController extends StorefrontController
             ], $context);
             $lineItem->setPayloadValue('dpDosenzauberConfig', $sanitized);
             $lineItem->setPayloadValue('dpGroupId', $configGroupId);
-            $lineItem->setRemovable(false); // gleiche Sperre wie NK-Items: Konfig ändert man nur neu konfigurieren
+            // WD bleibt removable=TRUE, damit Shopware das Remove-Form rendert.
+            // Der × wird im Twig-Override umgeleitet auf /dosenzauber/remove-config
+            // welcher dann WD + alle NK_*-Optionen gemeinsam entfernt.
+            $lineItem->setRemovable(true);
             $lineItem->setStackable(true);
 
             // Beschreibendes Label für Admin-Sichtbarkeit
