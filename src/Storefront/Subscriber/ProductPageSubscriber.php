@@ -17,21 +17,6 @@ class ProductPageSubscriber implements EventSubscriberInterface
         ];
     }
 
-    /**
-     * Kundengruppen-IDs die den Konfigurator sehen dürfen.
-     * Gleiche Logik wie für Staffelpreise — nur eingeloggte B2B-Kunden.
-     * Steffen Anger 2026-05-13: "wir müssen das nur für später berücksichtigen,
-     * dass wir die entsprechenden Codes dann aktivieren, dass nur nach anmelden
-     * der Konfigurator auch sichtbar ist."
-     */
-    private const ALLOWED_GROUPS = [
-        '01952490f8c17aa79a89e05f74345d88', // Premium PSI
-        '01960fc76ceb70459a6c85aeeb5f0326', // Shopkunden
-        '01960fc76d1c7105a5eebd44f0ba491f', // Goldstatus
-        '01960fc76d2272f685a85f806b3e5464', // Premium Wiederverkäufer (15%)
-        '0198efd7a5cd739ab9426d2769b1427c', // Premium Händler (10%)
-    ];
-
     public function onProductPageLoaded(ProductPageLoadedEvent $event): void
     {
         $product = $event->getPage()->getProduct();
@@ -41,11 +26,11 @@ class ProductPageSubscriber implements EventSubscriberInterface
             return;
         }
 
-        // Login-Gate: nur eingeloggte Kunden in einer erlaubten B2B-Gruppe
-        // sehen den Konfigurator. Sonst gleiche Behandlung wie bei Preisen
-        // (B2B-Plugin blendet sie ebenfalls aus).
+        // Login-Gate: nur eingeloggte Kunden sehen den Konfigurator.
+        // Steffen Anger 2026-05-13: "nur nach Anmeldung soll der Konfigurator
+        // sichtbar sein". Gäste sehen die Produktseite ohne Konfigurator.
         $customer = $event->getSalesChannelContext()->getCustomer();
-        if ($customer === null || !in_array($customer->getGroupId(), self::ALLOWED_GROUPS, true)) {
+        if ($customer === null) {
             $event->getPage()->assign(['dpDosenzauberActive' => false]);
             return;
         }

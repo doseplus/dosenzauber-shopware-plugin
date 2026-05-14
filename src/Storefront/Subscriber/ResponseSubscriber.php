@@ -77,17 +77,9 @@ class ResponseSubscriber implements EventSubscriberInterface
             return;
         }
 
-        // Login-Gate (gleiche Logik wie ProductPageSubscriber)
-        $context = $event->getSalesChannelContext();
-        $customer = $context->getCustomer();
-        $allowedGroups = [
-            '01952490f8c17aa79a89e05f74345d88',
-            '01960fc76ceb70459a6c85aeeb5f0326',
-            '01960fc76d1c7105a5eebd44f0ba491f',
-            '01960fc76d2272f685a85f806b3e5464',
-            '0198efd7a5cd739ab9426d2769b1427c',
-        ];
-        if ($customer === null || !in_array($customer->getGroupId(), $allowedGroups, true)) {
+        // Login-Gate: nur eingeloggte Kunden sehen den Konfigurator.
+        $customer = $event->getSalesChannelContext()->getCustomer();
+        if ($customer === null) {
             return;
         }
 
