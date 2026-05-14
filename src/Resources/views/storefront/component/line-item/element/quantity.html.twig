@@ -6,7 +6,7 @@
 {% sw_extends '@Storefront/storefront/component/line-item/element/quantity.html.twig' %}
 
 {% block component_line_item_quantity_select_wrapper %}
-    {% if lineItem.payload.dpDosenzauberOption is defined %}
+    {% if lineItem.payload.dpDosenzauberOption is defined or lineItem.payload.dpDosenzauberConfig is defined %}
         <div class="line-item-quantity-select-wrapper">
             <span class="line-item-quantity-display"
                   style="display:inline-block; padding:6px 12px; background:#f5f5f5; border:1px solid #e5e5e5; border-radius:4px; font-weight:600; color:#4d5452;">

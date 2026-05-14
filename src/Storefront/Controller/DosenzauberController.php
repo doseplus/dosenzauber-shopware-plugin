@@ -105,8 +105,8 @@ class DosenzauberController extends StorefrontController
             ], $context);
             $lineItem->setPayloadValue('dpDosenzauberConfig', $sanitized);
             $lineItem->setPayloadValue('dpGroupId', $configGroupId);
-            $lineItem->setRemovable(true);
-            $lineItem->setStackable(true); // qty > 1 erlaubt; unique id verhindert Merge mit anderen Konfigs
+            $lineItem->setRemovable(false); // gleiche Sperre wie NK-Items: Konfig ändert man nur neu konfigurieren
+            $lineItem->setStackable(true);
 
             // Beschreibendes Label für Admin-Sichtbarkeit
             $lineItem->setLabel($this->buildConfigLabel($product->getProductNumber(), $sanitized));
