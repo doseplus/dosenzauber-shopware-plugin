@@ -94,6 +94,14 @@ class DosenzauberController extends StorefrontController
             $sanitized = $this->sanitizeConfig($data);
             $sanitized['dpGroupId'] = $configGroupId;
 
+            // Produkt-Cover-URL im Payload mitsenden, damit das Admin-Order-Detail
+            // den Konfigurations-Block mit dem richtigen Produkt-Bild rendern kann
+            // auch wenn die Line-Item-Cover-Association nicht standardmäßig geladen ist.
+            $coverUrl = $product->getCover()?->getMedia()?->getUrl();
+            if ($coverUrl) {
+                $sanitized['productCoverUrl'] = $coverUrl;
+            }
+
             // Haupt-LineItem: das WD-Produkt selbst (Shopware-Staffel greift).
             // Eindeutige ID im Factory-Aufruf, sonst nutzt ProductLineItemFactory einen
             // deterministischen Hash → mehrfache Konfigurationen würden kollidieren.
@@ -105,20 +113,24 @@ class DosenzauberController extends StorefrontController
             ], $context);
             $lineItem->setPayloadValue('dpDosenzauberConfig', $sanitized);
             $lineItem->setPayloadValue('dpGroupId', $configGroupId);
-            // WD bleibt removable=TRUE, damit Shopware das Remove-Form rendert.
+            // DZ-Hauptprodukt bleibt removable=TRUE, damit Shopware das Remove-Form rendert.
             // Der × wird im Twig-Override umgeleitet auf /dosenzauber/remove-config
-            // welcher dann WD + alle NK_*-Optionen gemeinsam entfernt.
+            // welcher dann DZ + alle NK_*-Optionen gemeinsam entfernt.
             $lineItem->setRemovable(true);
             $lineItem->setStackable(true);
 
             // Beschreibendes Label für Admin-Sichtbarkeit
             $lineItem->setLabel($this->buildConfigLabel($product->getProductNumber(), $sanitized));
 
-            $cart = $this->cartService->add($cart, $lineItem, $context);
+            // Performance: Alle Optionen-LineItems vorbereiten und in EINEM cartService->add()
+            // mit Array hinzufügen. Shopware recalculiert dann nur EINMAL statt 6× — spart 1-3s.
+            $allItems = [$lineItem];
+            $optionItems = $this->buildOptionLineItems($sanitized, $product, $quantity, $configGroupId, $context);
+            foreach ($optionItems as $oi) {
+                $allItems[] = $oi;
+            }
 
-            // Konfigurations-Optionen als reale Shopware-Produkte hinzufügen
-            // (NK_RSW, NK_UV_PLANO/KONF, NK_LG, NK_LG_MASCHINE, NK_PERS, NK_KARTE_TEXT)
-            $cart = $this->addOptionProducts($cart, $sanitized, $product, $quantity, $configGroupId, $context);
+            $cart = $this->cartService->add($cart, $allItems, $context);
 
             // Promotion-Code an Shopware durchreichen (Weg A: native Promotion-Engine).
             // Shopware fügt den Placeholder hinzu, beim nächsten Recalculate prüft die
@@ -476,47 +488,51 @@ class DosenzauberController extends StorefrontController
      *   - NK_PERS                                        wenn options.laser + laser.personalisierung
      *   - NK_KARTE_TEXT                                  wenn options.fuellung + fuellung.karteVariant=persoenlich
      */
-    private function addOptionProducts(
-        \Shopware\Core\Checkout\Cart\Cart $cart,
+    /**
+     * Baut alle Option-LineItems (NK LG / Maschine / PERS / RSW / NK Karte / UV plano|konfektioniert).
+     * Lädt alle benötigten Helper-Produkte in EINEM DB-Query (vs. 5-6 separate Queries).
+     * Gibt Array von LineItems zurück, das dann gesammelt in cartService->add() übergeben wird.
+     *
+     * @return LineItem[]
+     */
+    private function buildOptionLineItems(
         array $cfg,
         SalesChannelProductEntity $baseProduct,
         int $quantity,
         string $configGroupId,
         SalesChannelContext $context
-    ): \Shopware\Core\Checkout\Cart\Cart {
+    ): array {
         $options = $cfg['options'] ?? [];
         $laser   = $cfg['laser'] ?? [];
         $fuell   = $cfg['fuellung'] ?? [];
 
         $additions = [];
 
-        // Lasergravur · pro Dose
         if (!empty($options['laser'])) {
             $additions[] = ['number' => 'NK LG', 'qty' => $quantity, 'label' => 'Lasergravur'];
-            // Maschinenrüstung einmalig
             $additions[] = ['number' => 'NK LG Maschinenrüstung', 'qty' => 1, 'label' => 'Maschinenrüstung Laser'];
             if (!empty($laser['personalisierung'])) {
                 $additions[] = ['number' => 'NK PERS', 'qty' => 1, 'label' => 'Personalisierung'];
             }
         }
 
-        // Ritter Sport · pro Dose × Riegel pro Dose
         if (!empty($options['fuellung'])) {
             $riegel = max(0, (int)($fuell['riegelProDose'] ?? 0));
             if ($riegel > 0) {
                 $additions[] = ['number' => 'RSW', 'qty' => $quantity * $riegel, 'label' => 'Ritter Sport Mini'];
             }
-            // Karte mit persönlichem Text einmalig
             if (($fuell['karteVariant'] ?? '') === 'persoenlich') {
                 $additions[] = ['number' => 'NK Karte', 'qty' => 1, 'label' => 'Karte mit pers. Text'];
             }
         }
 
-        // Versandverpackung · pro Dose, UV-Code je nach Dose-Größe (aus dataProvider)
         if (!empty($options['verpackung'])) {
             $verp = (string)($cfg['verpackung'] ?? 'plano');
-            $dpData = $this->dataProvider->getDataForProduct($baseProduct);
-            $uvNumber = (string)($dpData['uvNumber'] ?? '');
+            // uvNumber bereits aus cfg['uvNumber'] verfügbar — kein zweiter dataProvider-Aufruf nötig
+            $uvNumber = (string)($cfg['uvNumber'] ?? '');
+            if ($uvNumber === '') {
+                $uvNumber = $this->dataProvider->getDataForProduct($baseProduct, $context)['uvNumber'] ?? '';
+            }
             if ($uvNumber !== '') {
                 $variant = $verp === 'konfektioniert' ? 'konfektioniert' : 'plano';
                 $additions[] = [
@@ -527,8 +543,21 @@ class DosenzauberController extends StorefrontController
             }
         }
 
+        if (empty($additions)) return [];
+
+        // Performance: alle Helfer in EINEM Query laden statt 5-6 einzeln
+        $numbers = array_unique(array_column($additions, 'number'));
+        $criteria = (new Criteria())->addFilter(new \Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter('productNumber', $numbers));
+        $products = $this->productRepository->search($criteria, $context)->getEntities();
+        $productByNumber = [];
+        foreach ($products as $p) {
+            /** @var SalesChannelProductEntity $p */
+            $productByNumber[$p->getProductNumber()] = $p;
+        }
+
+        $items = [];
         foreach ($additions as $add) {
-            $optProduct = $this->loadProductByNumber($add['number'], $context);
+            $optProduct = $productByNumber[$add['number']] ?? null;
             if ($optProduct === null) {
                 $this->logger->warning('Dosenzauber: Option-Produkt nicht gefunden', ['number' => $add['number']]);
                 continue;
@@ -543,18 +572,14 @@ class DosenzauberController extends StorefrontController
             $optItem->setPayloadValue('dpDosenzauberOption', [
                 'baseProductNumber' => $baseProduct->getProductNumber(),
                 'baseLabel'         => $add['label'],
-                'productNumber'     => $add['number'],  // für AutoScaleProcessor
+                'productNumber'     => $add['number'],
             ]);
-            // Option-LineItems sind im Cart NICHT einzeln änderbar (Steffen Anger):
-            // setRemovable(false) verhindert das × in der UI. Quantity-Buttons
-            // werden via Twig-Override quantity.html.twig versteckt. KEINE
-            // QuantityInformation min=max mehr — das verursachte Cart-Update-Errors.
-            $optItem->setRemovable(false);
+            $optItem->setRemovable(true);
             $optItem->setStackable(true);
-            $cart = $this->cartService->add($cart, $optItem, $context);
+            $items[] = $optItem;
         }
 
-        return $cart;
+        return $items;
     }
 
     /**

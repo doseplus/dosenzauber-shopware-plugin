@@ -79,7 +79,7 @@ class ResponseSubscriber implements EventSubscriberInterface
 
         // Login-Gate entfernt: auf Live gibt es kein B2B-Plugin, Konfigurator für alle sichtbar.
 
-        $data = $this->dataProvider->getDataForProduct($product);
+        $data = $this->dataProvider->getDataForProduct($product, $event->getSalesChannelContext());
         if ($data === null) {
             return;
         }
@@ -134,27 +134,50 @@ class ResponseSubscriber implements EventSubscriberInterface
 
         // CDN-Dependencies vor </head>, Konfigurator-HTML direkt vor .product-detail-contact.
         // Keine Template-Tags, kein JS-Injection — Alpine bindet selbst on load.
+        // Vorgebaute Tailwind-Utilities + scoped Preflight (~12 KB statt 3 MB CDN).
+        // Alpine + Lucide bleiben deferred via CDN.
         $headDeps = <<<HTML
 
-<!-- Dosenzauber-Konfigurator: CDN-Dependencies -->
+<!-- Dosenzauber-Konfigurator: Assets (Tailwind statisch + Alpine; Lucide entfernt — alle Icons inline-SVG) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/bundles/doseplusdosenzauberconfigurator/configurator.css">
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js" defer></script>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 HTML;
 
-        $bodyContent = '<div class="dp-cfg-injected" style="margin:0 0 8px 0;padding:0">' . $configuratorHtml . '</div>';
+        // Configurator-HTML + Inline-Script:
+        //   1. verschiebt Konfigurator ans Ende von .product-detail-buy
+        //   2. verschiebt "Sie haben Fragen"-Box (.product-detail-contact) direkt darunter
+        // Beide Moves laufen IM DOMContentLoaded-Event weil das Script vor der Contact-Box
+        // im HTML platziert ist und beim sync-Parse die Box noch nicht existiert.
+        $bodyContent = '<div class="dp-cfg-injected" style="margin:24px 0 8px 0;padding:0">' . $configuratorHtml . '</div>'
+            . '<script>(function(){'
+            . 'var doMove=function(){'
+            . 'var cfg=document.querySelector(".dp-cfg-injected");'
+            . 'var b=document.querySelector(".product-detail-buy");'
+            . 'if(!b||!cfg)return;'
+            . 'if(cfg.parentNode!==b){b.appendChild(cfg);}'
+            . 'var contact=document.querySelector(".product-detail-contact");'
+            . 'if(contact&&!b.contains(contact)){'
+            . 'var contactWrap=contact.closest(".col-lg-5")||contact.parentNode;'
+            . 'b.appendChild(contact);'
+            . 'if(contactWrap&&contactWrap.parentNode&&contactWrap!==contact&&contactWrap.children.length===0){contactWrap.parentNode.removeChild(contactWrap);}'
+            . '}'
+            . '};'
+            . 'if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",doMove);}else{doMove();}'
+            . '})();</script>';
 
         // Dependencies vor </head> einfügen
         if (stripos($content, '</head>') !== false) {
             $content = preg_replace('/<\/head>/i', $headDeps . "\n</head>", $content, 1);
         }
 
-        // Injection vor .product-detail-contact: col-lg-5 mit Konfigurator,
-        //   col-lg-7 Sibling = Beschreibungs-Tabs (Side-by-Side).
-        // Fallback: vor </body>.
+        // Injection: vor .product-detail-contact. Das eingebettete Inline-Script
+        //   im $bodyContent verschiebt den Konfigurator beim Page-Load ans Ende
+        //   von .product-detail-buy (direkt unter VPE, über "Sie haben Fragen").
+        //   Falls JS deaktiviert ist: bleibt an der Original-Position.
         $contactPattern = '/<div\s+class="[^"]*\bproduct-detail-contact\b[^"]*"/i';
         if (preg_match($contactPattern, $content)) {
             $content = preg_replace($contactPattern, $bodyContent . "\n" . '$0', $content, 1);

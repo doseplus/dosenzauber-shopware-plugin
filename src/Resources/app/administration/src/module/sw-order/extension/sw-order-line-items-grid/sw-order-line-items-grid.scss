@@ -66,6 +66,21 @@
         margin-top: 8px;
     }
 
+    .dp-cfg-admin-product-image {
+        display: flex;
+        justify-content: center;
+        padding: 12px 0;
+        margin: 0 0 12px 0;
+        border-bottom: 1px solid #f0f0f0;
+
+        img {
+            max-width: 220px;
+            max-height: 160px;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+    }
+
     .dp-cfg-admin-logo-preview {
         margin-top: 8px;
         padding: 8px;

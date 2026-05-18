@@ -5,8 +5,12 @@
            http://symfony.com/schema/dic/services/services-1.0.xsd">
 
     <services>
+        <service id="Doseplus\DosenzauberConfigurator\Service\ConfiguratorTranslations"/>
+
         <service id="Doseplus\DosenzauberConfigurator\Service\ConfiguratorDataProvider">
             <argument type="service" id="Psr\Log\LoggerInterface"/>
+            <argument type="service" id="Doseplus\DosenzauberConfigurator\Service\ConfiguratorTranslations"/>
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
         </service>
 
         <service id="Doseplus\DosenzauberConfigurator\Storefront\Subscriber\ProductPageSubscriber">
@@ -22,14 +26,15 @@
             <tag name="kernel.event_subscriber"/>
         </service>
 
-        <!-- Cart-Processors deaktiviert wegen Bugs (Items verschwanden bei Qty-Change). -->
-        <!-- Wieder aktivieren wenn AutoScale + OrphanedCleaner fertig debuggt sind. -->
+        <!-- Cart-Processors deaktiviert — verursachen "not removable"-Fehler beim Cart-Add weil
+             sie versuchen NK_*-Items zu entfernen die setRemovable(false) haben. Stattdessen
+             reicht die Twig-Lock-Logik (× nur auf DZ + removeConfig-Endpoint). -->
         <!--
-        <service id="Doseplus\DosenzauberConfigurator\Cart\OrphanedOptionsCleaner">
-            <tag name="shopware.cart.processor" priority="500"/>
-        </service>
         <service id="Doseplus\DosenzauberConfigurator\Cart\AutoScaleProcessor">
             <tag name="shopware.cart.processor" priority="600"/>
+        </service>
+        <service id="Doseplus\DosenzauberConfigurator\Cart\OrphanedOptionsCleaner">
+            <tag name="shopware.cart.processor" priority="500"/>
         </service>
         -->
 

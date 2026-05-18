@@ -23,10 +23,35 @@
    Hier nur das Stylesheet, das ist auch im <template> noch wirksam. #}
 
 <style>
-  /* Alten Neon-Konfigurator bei DZ-/WD-Produkten ausblenden (rendert nur wenn dieses Plugin aktiv ist) */
+  /* Alten Neon-Konfigurator bei DZ-Produkten ausblenden (rendert nur wenn dieses Plugin aktiv ist) */
   [class*="neonConfigurator--"],
   .neonConfigurator,
   [data-neon-configurator-name] { display: none !important; }
+
+  /* Standard Buy-Form (Mengenwahl + "In den Warenkorb") + "Als PDF speichern"
+     ausblenden — wir haben eigenen Cart-Add im Konfigurator. Nur Blankomuster bleibt. */
+  .product-detail-form-container,
+  .pdfexport-btn-product { display: none !important; }
+
+  /* Margin-Compression: Konfigurator + Contact-Box sitzen jetzt im selben Container,
+     daher die default Bootstrap-Margins zwischen ihnen entfernen. */
+  .product-detail-buy .dp-cfg-injected { margin: 8px 0 8px 0 !important; }
+  .product-detail-buy .product-detail-contact { margin: 0 !important; }
+  .product-detail-buy .product-detail-contact + * { margin-top: 0 !important; }
+  /* Wenn die alte Row mit dem leeren col-lg-5 noch da ist: verstecken */
+  .cms-block-container-row > .col-lg-5:empty { display: none !important; }
+
+  /* Tailwind ist statisch vorgebaut mit vollem Preflight — identisch zum CDN-Verhalten.
+     Storefront-Headings (die ja global gereset wurden) zurückbringen: */
+  body h1:not(.dp-cfg h1), body .h1 { font-size: 2.5rem; font-weight: 500; line-height: 1.2; margin: 0 0 .5rem; }
+  body h2:not(.dp-cfg h2), body .h2 { font-size: 2rem;   font-weight: 500; line-height: 1.2; margin: 0 0 .5rem; }
+  body h3:not(.dp-cfg h3), body .h3 { font-size: 1.75rem; font-weight: 500; line-height: 1.2; margin: 0 0 .5rem; }
+  body h4, body .h4 { font-size: 1.5rem;  font-weight: 500; line-height: 1.2; margin: 0 0 .5rem; }
+  body h5, body .h5 { font-size: 1.25rem; font-weight: 500; line-height: 1.2; margin: 0 0 .5rem; }
+  body h6, body .h6 { font-size: 1rem;    font-weight: 500; line-height: 1.2; margin: 0 0 .5rem; }
+  /* Tabellen-Reset NUR im Konfigurator-Scope — Shopware-Storefront-Tabellen bleiben unangetastet */
+  .dp-cfg table { border-collapse: collapse; }
+  body .product-detail-name { font-size: 2.5rem; font-weight: 500; line-height: 1.2; }
 
   .dp-cfg { font-family: 'Inter', ui-sans-serif, system-ui; color: #4d5452; }
   .dp-cfg [x-cloak] { display: none !important; }
@@ -47,24 +72,41 @@
 </style>
 
 {# Stage/Live-kompatibler Base-Path für API-Routes (z.B. /dpstage/dosenzauber/add-to-cart) #}
-<script>window.dpDosenzauberBasePath = "{{ app.request.basePath|default('') }}";</script>
+{# cfg + productImageFilled als globale Vars setzen — vermeidet Probleme mit
+   Apostrophen (FR/EN) und Quotes im HTML-Attribut #}
+<script>
+window.dpDosenzauberBasePath = "{{ app.request.basePath|default('') }}";
+window.dpDosenzauberCfgData = {{ cfg|json_encode|raw }};
+window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
+</script>
+
+{# Inline-SVG-Icons (Lucide-Pfade) — funktioniert IMMER ohne JS-Lib #}
+{% set icSvg = {
+    'upload-cloud':     '<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/>',
+    'x':                '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    'message-square-text':'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8H7"/><path d="M17 12H7"/>',
+    'lock':             '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    'alert-triangle':   '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    'package-2':        '<path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z"/><path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"/><path d="M12 3v6"/>',
+    'alert-circle':     '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+    'gift':             '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
+    'truck':            '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+    'shopping-cart':    '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+    'loader-2':         '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+    'check-circle-2':   '<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 12 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/>'
+} %}
 
 <div class="dp-cfg"
      style="margin-top:0 !important; margin-bottom:0 !important"
-     x-data='dpDosenzauberCfg({{ cfg|json_encode|raw }}, {{ productImageFilled|json_encode|raw }})'
-     x-init="$nextTick(() => { initSliders(); if (typeof lucide !== 'undefined') lucide.createIcons(); })">
+     x-data="dpDosenzauberCfg(window.dpDosenzauberCfgData, window.dpDosenzauberProductImage)"
+     x-init="$nextTick(() => { initSliders(); })">
 
     <div class="bg-white border border-stone-200 rounded-xl overflow-hidden">
 
         {# Plugin-Header #}
-        <header class="px-5 py-4 border-b border-stone-200 bg-stone-50 flex items-center gap-3">
-            <div class="w-10 h-10 bg-red-600 text-white rounded-lg flex items-center justify-center font-bold">
-                <i data-lucide="sparkles" class="lucide w-5 h-5"></i>
-            </div>
-            <div>
-                <h2 class="text-lg leading-tight">Veredelung jetzt konfigurieren</h2>
-                <p class="text-xs text-stone-500">In 20 Sekunden zum Firmen-Geschenk · Live-Preis</p>
-            </div>
+        <header class="px-5 py-4 border-b border-stone-200 bg-stone-50">
+            <h2 class="text-lg leading-tight">{{ cfg.t.heading }}</h2>
+            <p class="text-xs text-stone-500">{{ cfg.t.subheading }}</p>
         </header>
 
         <div class="p-5 space-y-3">
@@ -77,7 +119,7 @@
                     <div class="px-4 py-3 flex items-center gap-3 cursor-pointer" @click="toggle(idx)">
                         <div class="w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 bg-white"
                              :class="opt.on ? 'border-red-600' : 'border-stone-200 opacity-50'">
-                            <img :src="opt.key === 'fuellung' && productImageFilled ? productImageFilled : opt.tile" :alt="opt.title" class="w-full h-full object-cover">
+                            <img :src="opt.tile" :alt="opt.title" class="w-full h-full object-cover">
                         </div>
                         <div class="flex-1 min-w-0">
                             <p class="font-bold text-sm leading-tight" x-text="opt.title"></p>
@@ -107,10 +149,10 @@
                                 <input type="file" x-ref="logoInput" class="hidden" @change="onLogoUpload($event)" accept=".pdf,.svg,.png,.jpg">
                                 <template x-if="!logoFile">
                                     <div class="flex items-center gap-3 w-full">
-                                        <i data-lucide="upload-cloud" class="lucide w-5 h-5 text-stone-500 shrink-0"></i>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-5 h-5 text-stone-500 shrink-0">{{ icSvg['upload-cloud']|raw }}</svg>
                                         <div class="flex-1">
-                                            <p class="text-xs font-semibold">Logo hochladen</p>
-                                            <p class="text-[10px] text-stone-500">SVG, PDF, PNG · klicken oder ziehen</p>
+                                            <p class="text-xs font-semibold">{{ cfg.t.laser_upload }}</p>
+                                            <p class="text-[10px] text-stone-500">{{ cfg.t.laser_upload_hint }}</p>
                                         </div>
                                     </div>
                                 </template>
@@ -121,14 +163,14 @@
                                         </div>
                                         <div class="flex-1 min-w-0">
                                             <p class="text-xs font-semibold truncate" x-text="logoFile.name"></p>
-                                            <p class="text-[10px] text-red-600">Vorschau aktiv</p>
+                                            <p class="text-[10px] text-red-600">{{ cfg.t.preview_active }}</p>
                                         </div>
-                                        <button @click.stop="removeLogo()" class="text-stone-500 hover:text-stone-900 p-1"><i data-lucide="x" class="lucide w-3.5 h-3.5"></i></button>
+                                        <button @click.stop="removeLogo()" class="text-stone-500 hover:text-stone-900 p-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-3.5 h-3.5">{{ icSvg['x']|raw }}</svg></button>
                                     </div>
                                 </template>
                             </div>
                             <p class="text-[10px] text-stone-500 mt-2">
-                                NK LG · + <span x-text="formatPrice(cfg.fixedPrices.nkLgMaschine)"></span> Maschinenrüstung (einmalig)
+                                NK LG · + <span x-text="formatPrice(cfg.fixedPrices.nkLgMaschine)"></span> {{ cfg.t.laser_machine_setup }}
                             </p>
 
                             {# NK PERS · Personalisierung #}
@@ -136,8 +178,8 @@
                                    :class="laser.personalisierung ? 'border-red-600 bg-white' : 'border-stone-200 bg-stone-50 hover:border-red-600'">
                                 <input type="checkbox" x-model="laser.personalisierung" class="checkbox-sw" @click.stop>
                                 <div class="flex-1">
-                                    <p class="text-xs font-semibold leading-tight">NK PERS · Personalisierung</p>
-                                    <p class="text-[10px] text-stone-500 leading-tight">Fortlaufende Textvariable · z.B. Nummerierung bzw. Namensänderung im Motiv</p>
+                                    <p class="text-xs font-semibold leading-tight">NK PERS · {{ cfg.t.laser_personalization }}</p>
+                                    <p class="text-[10px] text-stone-500 leading-tight">{{ cfg.t.laser_pers_hint }}</p>
                                 </div>
                                 <span class="text-xs font-bold num shrink-0">+ <span x-text="formatPrice(cfg.fixedPrices.nkPersonalisierung)"></span></span>
                             </label>
@@ -147,24 +189,24 @@
                         <div x-show="opt.key === 'fuellung'" class="space-y-3">
                             <div class="flex items-center gap-3">
                                 <div class="flex-1">
-                                    <p class="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Befüllung pro Dose</p>
+                                    <p class="text-[10px] uppercase tracking-wider text-stone-500 font-bold">{{ cfg.t.fuellung_pro_dose }}</p>
                                     <p class="text-lg font-extrabold num leading-tight mt-0.5">
-                                        <span x-text="cfg.maxRiegel"></span> × Ritter Sport Mini
+                                        <span x-text="cfg.maxRiegel"></span> × {{ cfg.t.fuellung_riegel_suffix }}
                                     </p>
                                     <p class="text-[10px] text-stone-500 mt-0.5">
-                                        4-Sorten-Mix · <span x-text="formatPrice(cfg.fixedPrices.rsw)"></span>/Riegel
-                                        · <span class="text-amber-700">Auslieferung ab Sommer 2026</span>
+                                        {{ cfg.t.fuellung_mix_hint }} · <span x-text="formatPrice(cfg.fixedPrices.rsw)"></span>/Riegel
+                                        · <span class="text-amber-700">{{ cfg.t.fuellung_delivery }}</span>
                                     </p>
                                 </div>
                                 <div class="text-right shrink-0">
-                                    <p class="text-[10px] uppercase tracking-wider text-stone-500 font-bold">je Dose</p>
+                                    <p class="text-[10px] uppercase tracking-wider text-stone-500 font-bold">{{ cfg.t.fuellung_je_dose }}</p>
                                     <p class="text-lg font-extrabold num text-red-600 leading-tight mt-0.5"
                                        x-text="formatPrice(cfg.maxRiegel * cfg.fixedPrices.rsw)"></p>
                                 </div>
                             </div>
 
                             <div>
-                                <p class="text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1.5">Grußkarte</p>
+                                <p class="text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1.5">{{ cfg.t.card_title }}</p>
                                 <div class="grid grid-cols-2 gap-1.5">
                                     <template x-for="k in karteVarianten" :key="k.value">
                                         <button type="button" @click.stop="karteVariant = k.value"
@@ -173,7 +215,7 @@
                                             <span x-show="karteVariant === k.value" x-cloak class="absolute top-1 right-1 w-4 h-4 bg-red-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">✓</span>
                                             <p class="font-bold text-xs leading-tight" x-text="k.label"></p>
                                             <p class="text-[10px] text-stone-500 leading-tight mt-0.5" x-text="k.hint"></p>
-                                            <p class="text-[11px] font-bold num text-red-600 mt-1" x-text="k.price > 0 ? `+ ${formatPrice(k.price)} pauschal` : 'inklusive'"></p>
+                                            <p class="text-[11px] font-bold num text-red-600 mt-1" x-text="k.price > 0 ? `+ ${formatPrice(k.price)} ${cfg.t.card_custom_price}` : cfg.t.card_default_label"></p>
                                         </button>
                                     </template>
                                 </div>
@@ -183,19 +225,19 @@
                                      @click.stop="karteVariant = 'persoenlich'; $nextTick(() => $refs.karteInput.focus())">
                                     <label class="text-[10px] uppercase tracking-wider font-bold mb-2 flex items-center gap-1.5"
                                            :class="karteVariant === 'persoenlich' ? 'text-red-600' : 'text-stone-500'">
-                                        <i data-lucide="message-square-text" class="lucide w-3.5 h-3.5"></i>
-                                        Ihr Wunschtext für die Karte
-                                        <span x-show="karteVariant !== 'persoenlich'" class="ml-auto text-red-600 font-bold normal-case tracking-normal">← klicke zum Tippen</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-3.5 h-3.5">{{ icSvg['message-square-text']|raw }}</svg>
+                                        {{ cfg.t.card_text_label }}
+                                        <span x-show="karteVariant !== 'persoenlich'" class="ml-auto text-red-600 font-bold normal-case tracking-normal">{{ cfg.t.card_text_click_hint }}</span>
                                     </label>
                                     <textarea x-ref="karteInput" x-model="karteText" maxlength="450" rows="4"
                                               @click.stop @focus="karteVariant='persoenlich'" @input="karteVariant='persoenlich'"
-                                              placeholder="Hier tippen, z.B.: Frohe Weihnachten von Ihrem Team — vielen Dank für die tolle Zusammenarbeit!"
+                                              placeholder="{{ cfg.t.card_text_placeholder|e('html_attr') }}"
                                               class="w-full border-2 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-600 resize-none bg-white"
                                               :class="karteVariant === 'persoenlich' ? 'border-red-600' : 'border-stone-200'"></textarea>
                                     <div class="text-[10px] mt-1.5 flex justify-between gap-2">
                                         <span>
-                                            <span x-show="karteVariant === 'persoenlich'">+ <span x-text="formatPrice(cfg.fixedPrices.karteText)"></span> pauschal · Freigabe mit Lasergravur</span>
-                                            <span x-show="karteVariant !== 'persoenlich'">Klick → wird aktiviert (+<span x-text="formatPrice(cfg.fixedPrices.karteText)"></span> pauschal)</span>
+                                            <span x-show="karteVariant === 'persoenlich'">+ <span x-text="formatPrice(cfg.fixedPrices.karteText)"></span> {{ cfg.t.card_personal_freigabe }}</span>
+                                            <span x-show="karteVariant !== 'persoenlich'">{{ cfg.t.card_text_activate }} (+<span x-text="formatPrice(cfg.fixedPrices.karteText)"></span> {{ cfg.t.card_custom_price }})</span>
                                         </span>
                                         <span class="num font-semibold whitespace-nowrap"><span x-text="karteText.length"></span> / 450</span>
                                     </div>
@@ -211,7 +253,7 @@
                                         :class="isVerpackungDisabled(v.value) ? 'border-stone-200 bg-stone-50 opacity-50 cursor-not-allowed' : (verpackungVariant === v.value ? 'border-red-600 bg-red-50' : 'border-stone-200 bg-white hover:border-red-600')"
                                         class="border-2 rounded-lg p-2 text-left relative">
                                     <span x-show="verpackungVariant === v.value && !isVerpackungDisabled(v.value)" x-cloak class="absolute top-1 right-1 w-4 h-4 bg-red-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">✓</span>
-                                    <span x-show="isVerpackungDisabled(v.value)" x-cloak class="absolute top-1 right-1"><i data-lucide="lock" class="lucide w-3 h-3 text-stone-500"></i></span>
+                                    <span x-show="isVerpackungDisabled(v.value)" x-cloak class="absolute top-1 right-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-3 h-3 text-stone-500">{{ icSvg['lock']|raw }}</svg></span>
                                     <p class="font-bold text-xs leading-tight" x-text="v.label"></p>
                                     <p class="text-[10px] text-stone-500 leading-tight mt-0.5" x-text="v.hint + (isVerpackungDisabled(v.value) ? ' (nur bei befüllten Dosen)' : '')"></p>
                                     <p class="text-[11px] font-bold num text-red-600 mt-1" x-text="`+ ${formatPrice(v.price)}`"></p>
@@ -226,17 +268,17 @@
             <div class="border-2 border-stone-200 rounded-xl p-4 mt-3">
                 <div class="flex items-end justify-between mb-2">
                     <div>
-                        <p class="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Stückzahl · in <span x-text="cfg.kartonSize"></span>er-Kartons</p>
+                        <p class="text-[10px] uppercase tracking-wider text-stone-500 font-bold">{{ cfg.t.qty_label }} · {{ cfg.t.qty_in_cartons }} <span x-text="cfg.kartonSize"></span>{{ cfg.t.qty_cartons_suffix }}</p>
                         <div class="flex items-baseline gap-1.5 mt-1">
                             <span class="text-3xl font-extrabold num leading-none" x-text="quantity"></span>
-                            <span class="text-sm text-stone-500">Dosen</span>
-                            <span class="text-xs text-stone-500 num">(<span x-text="Math.ceil(quantity / cfg.kartonSize)"></span> Karton<span x-show="Math.ceil(quantity / cfg.kartonSize) > 1">s</span>)</span>
+                            <span class="text-sm text-stone-500">{{ cfg.t.qty_doses }}</span>
+                            <span class="text-xs text-stone-500 num">(<span x-text="Math.ceil(quantity / cfg.kartonSize)"></span> {{ cfg.t.qty_carton }}<span x-show="Math.ceil(quantity / cfg.kartonSize) > 1">s</span>)</span>
                         </div>
                     </div>
                     <div class="text-right">
-                        <p class="text-[10px] text-stone-500 num">Min <span x-text="cfg.kartonSize"></span> · Step <span x-text="cfg.kartonSize"></span></p>
+                        <p class="text-[10px] text-stone-500 num">{{ cfg.t.qty_min }} <span x-text="cfg.kartonSize"></span> · {{ cfg.t.qty_step }} <span x-text="cfg.kartonSize"></span></p>
                         <p x-show="!isAngebot()" x-cloak class="text-[10px] text-red-600 font-bold uppercase tracking-wider mt-1" x-text="staffelLabel()"></p>
-                        <p x-show="isAngebot()" x-cloak class="text-[10px] text-amber-700 font-bold uppercase tracking-wider mt-1">Angebot anfragen</p>
+                        <p x-show="isAngebot()" x-cloak class="text-[10px] text-amber-700 font-bold uppercase tracking-wider mt-1">{{ cfg.t.qty_offer_request }}</p>
                     </div>
                 </div>
                 <input type="range" :min="cfg.kartonSize" max="1500" :step="cfg.kartonSize"
@@ -251,8 +293,8 @@
                 </div>
                 <p x-show="options[0].on && quantity < cfg.kartonSize" x-cloak
                    class="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2 flex items-center gap-1.5">
-                    <i data-lucide="alert-triangle" class="lucide w-3 h-3"></i>
-                    Lasergravur erst ab <span x-text="cfg.kartonSize"></span> Dosen möglich
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-3 h-3">{{ icSvg['alert-triangle']|raw }}</svg>
+                    {{ cfg.t.laser_min_qty_warning }} <span x-text="cfg.kartonSize"></span> {{ cfg.t.laser_min_qty_warning2 }}
                 </p>
                 <div class="mt-3 pt-3 border-t border-stone-200 grid grid-cols-5 gap-1 text-center text-[10px]">
                     <template x-for="(p, i) in cfg.wdStaffel" :key="i">
@@ -269,51 +311,75 @@
             <details class="bg-stone-50 border border-stone-200 rounded-lg text-xs">
                 <summary class="px-4 py-2.5 cursor-pointer font-semibold flex items-center justify-between hover:bg-stone-100">
                     <span class="flex items-center gap-2">
-                        <i data-lucide="package-2" class="lucide w-4 h-4 text-stone-500"></i>
-                        Stückliste · was steckt in <span class="num" x-text="cfg.productNumber"></span>?
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-4 h-4 text-stone-500">{{ icSvg['package-2']|raw }}</svg>
+                        {{ cfg.t.stueckliste_heading }} <span class="num" x-text="cfg.productNumber"></span>{{ cfg.t.stueckliste_question }}
                     </span>
                 </summary>
                 <div class="px-4 pb-3 space-y-1.5">
+                    {# Formel-Zeile: WKN bei neutraler Karte, WKI bei persönlichem Text (Theilich 2026-05-18 Punkte 4+5).
+                       UV ohne K-Suffix — gleicher Bestand für plano + konfektioniert (Punkt 2). #}
                     <p class="num font-mono text-[11px] text-stone-500 pb-1">
-                        <span x-text="cfg.productNumber"></span> = <span x-text="cfg.wd"></span>
+                        <span x-text="cfg.productNumber"></span>
+                        <span x-show="options[1].on && karteVariant !== 'persoenlich'"> + <span x-text="cfg.wkn"></span></span>
+                        <span x-show="options[1].on && karteVariant === 'persoenlich'"> + <span x-text="cfg.wki"></span></span>
                         <span x-show="options[0].on"> + NK LG (<span x-text="cfg.gravurCode"></span>)</span>
                         <span x-show="options[0].on && laser.personalisierung"> + NK PERS</span>
                         <span x-show="options[1].on"> + <span x-text="cfg.maxRiegel"></span>× RSW</span>
-                        <span x-show="options[2].on"> + <span x-text="cfg.uvNumber"></span><span x-show="verpackungVariant === 'konfektioniert'"> (konf.)</span></span>
+                        <span x-show="options[2].on"> + <span x-text="cfg.uvNumber"></span></span>
                     </p>
                     <ul class="space-y-1 text-[11px]">
-                        <li><span x-text="cfg.wd"></span> — Weihnachtsdose · Staffel: <span x-text="`${formatPrice(cfg.wdStaffel[0])}–${formatPrice(cfg.wdStaffel[4])}`"></span></li>
-                        <li x-show="options[0].on">NK LG (<span x-text="cfg.gravurCode"></span>) — Lasergravur · aktuell <span class="font-semibold" x-text="formatPrice(laserPrice())"></span>/Stück (<span x-text="staffelLabel()"></span>)</li>
-                        <li x-show="options[0].on">Maschinenrüstung — <span x-text="formatPrice(cfg.fixedPrices.nkLgMaschine)"></span> einmalig</li>
-                        <li x-show="options[0].on && laser.personalisierung">NK PERS — Personalisierung <span x-text="formatPrice(cfg.fixedPrices.nkPersonalisierung)"></span> pauschal</li>
-                        <li x-show="options[1].on">RSW — Ritter Sport Würfel · 4-Sorten-Mix · <span x-text="formatPrice(cfg.fixedPrices.rsw)"></span>/Stück</li>
-                        <li x-show="options[1].on">
-                            <template x-if="karteVariant === 'persoenlich'"><span>Karte mit pers. Text — <span x-text="formatPrice(cfg.fixedPrices.karteText)"></span> pauschal</span></template>
-                            <template x-if="karteVariant !== 'persoenlich'"><span>Karte mit Dosenmotiv — inklusive</span></template>
+                        {# WD-Zeile: aktueller Staffelpreis + Label statt nur Range (Theilich Punkt 7). #}
+                        <li>
+                            <span x-text="cfg.productNumber"></span> — {{ cfg.t.sl_weihnachtsdose }} ·
+                            {{ cfg.t.sl_laser_aktuell }}
+                            <span class="font-semibold" x-text="formatPrice(wdPrice())"></span>{{ cfg.t.sl_stueck }}
+                            (<span x-text="staffelLabel()"></span>)
                         </li>
+                        <li x-show="options[0].on">NK LG (<span x-text="cfg.gravurCode"></span>) — {{ cfg.t.sl_laser_aktuell }} <span class="font-semibold" x-text="formatPrice(laserPrice())"></span>{{ cfg.t.sl_stueck }} (<span x-text="staffelLabel()"></span>)</li>
+                        <li x-show="options[0].on">{{ cfg.t.laser_machine_setup }} — <span x-text="formatPrice(cfg.fixedPrices.nkLgMaschine)"></span> {{ cfg.t.sl_einmalig }}</li>
+                        <li x-show="options[0].on && laser.personalisierung">NK PERS — {{ cfg.t.laser_personalization }} <span x-text="formatPrice(cfg.fixedPrices.nkPersonalisierung)"></span> {{ cfg.t.sl_pauschal }}</li>
+                        <li x-show="options[1].on">RSW — {{ cfg.t.sl_ritter_voll }} · <span x-text="formatPrice(cfg.fixedPrices.rsw)"></span>{{ cfg.t.sl_stueck }}</li>
+
+                        {# WKN: neutrale Karte, bucht vom Bestand ab (Theilich Punkt 4). #}
+                        <li x-show="options[1].on && karteVariant !== 'persoenlich'">
+                            <span x-text="cfg.wkn"></span> — {{ cfg.t.sl_karte_dosenmotiv }}
+                        </li>
+
+                        {# WKI: Sonderanfertigung mit Wunschtext, KEIN WKN-Abzug (Theilich Punkt 5). #}
+                        <li x-show="options[1].on && karteVariant === 'persoenlich'" class="space-y-0.5">
+                            <div>
+                                <span x-text="cfg.wki"></span> — {{ cfg.t.sl_karte_pers_text }} ·
+                                <span class="font-semibold" x-text="formatPrice(cfg.fixedPrices.karteText)"></span> {{ cfg.t.sl_pauschal }}
+                            </div>
+                            <div x-show="karteText.trim().length > 0" class="bg-white border border-stone-200 rounded px-2 py-1 text-[10px] text-stone-700 italic" x-text="`„${karteText}“`"></div>
+                        </li>
+
+                        {# UV-Zeile: ein SKU für plano + konfektioniert (Theilich Punkt 2). #}
                         <li x-show="options[2].on && verpackungVariant === 'plano'">
-                            <span x-text="cfg.uvNumber"></span> · Versandverpackung plano — <span x-text="cfg.uvSize"></span> · <span class="font-semibold"><span x-text="formatPrice(cfg.fixedPrices.ukPlano)"></span> plano beigelegt</span>
+                            <span x-text="cfg.uvNumber"></span> · {{ cfg.t.sl_uv_plano }} — <span x-text="cfg.uvSize"></span> · <span class="font-semibold"><span x-text="formatPrice(cfg.fixedPrices.ukPlano)"></span> {{ cfg.t.sl_plano_beigelegt }}</span>
                         </li>
                         <li x-show="options[2].on && verpackungVariant === 'konfektioniert'">
-                            <span x-text="cfg.uvNumber"></span> K · Versandverpackung konfektioniert — <span x-text="cfg.uvSize"></span> · <span class="font-semibold"><span x-text="formatPrice(cfg.fixedPrices.ukKonfektioniert)"></span> Dose im Karton verpackt</span>
+                            <span x-text="cfg.uvNumber"></span> · {{ cfg.t.sl_uv_konf }} — <span x-text="cfg.uvSize"></span> · <span class="font-semibold"><span x-text="formatPrice(cfg.fixedPrices.ukKonfektioniert)"></span> {{ cfg.t.sl_dose_im_karton }}</span>
                         </li>
                     </ul>
                 </div>
             </details>
 
-            {# Angebot-Box (ab >1000 Stück) #}
+            {# Angebot-Box (ab >1000 Stück) — Icons inline-SVG damit auch bei verzögertem Lucide-Load sichtbar #}
             <div x-show="isAngebot()" x-cloak class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 mt-3 text-center">
                 <div class="w-12 h-12 mx-auto mb-3 bg-amber-100 rounded-full flex items-center justify-center">
-                    <i data-lucide="phone" class="lucide w-6 h-6 text-amber-700"></i>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-amber-700"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                 </div>
-                <p class="font-bold text-amber-900 text-lg leading-tight"><span x-text="quantity"></span> Dosen · Individuelles Angebot</p>
-                <p class="text-sm text-amber-900/80 mt-2">Für diese Stückzahl erstellen wir Ihnen gern ein individuelles Angebot.</p>
+                <p class="font-bold text-amber-900 text-lg leading-tight"><span x-text="quantity"></span> {{ cfg.t.qty_doses }} · {{ cfg.t.qty_offer_request }}</p>
+                <p class="text-sm text-amber-900/80 mt-2">{{ cfg.t.qty_offer_request_text }}</p>
                 <div class="mt-4 space-y-2">
                     <a href="mailto:maria.topf@dosenzauber.com" class="block bg-white border border-amber-300 hover:border-amber-500 rounded-lg py-2.5 px-4 text-sm font-semibold text-amber-900 transition flex items-center justify-center gap-2">
-                        <i data-lucide="mail" class="lucide w-4 h-4"></i> maria.topf@dosenzauber.com
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                        maria.topf@dosenzauber.com
                     </a>
                     <a href="tel:+4936217338000" class="block bg-amber-700 hover:bg-amber-800 text-white rounded-lg py-2.5 px-4 text-sm font-bold transition flex items-center justify-center gap-2">
-                        <i data-lucide="phone" class="lucide w-4 h-4"></i> +49 (0) 3621 733 800
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                        +49 (0) 3621 733 800
                     </a>
                 </div>
             </div>
@@ -323,28 +389,28 @@
 
                 {# Rabattcode-Eingabe (wenn noch nicht eingelöst) #}
                 <div x-show="!promoApplied" x-cloak class="bg-stone-800 border border-stone-700 rounded-lg p-3 mb-3">
-                    <p class="text-xs text-white/80 leading-snug">Sie haben einen gültigen Rabattcode? Bitte geben Sie diesen hier ein.</p>
+                    <p class="text-xs text-white/80 leading-snug">{{ cfg.t.promo_label }}</p>
                     <div class="flex gap-1.5 mt-2">
-                        <input type="text" x-model="promoInput" @keyup.enter="applyPromo()" placeholder="z.B. XMAS20" class="flex-1 bg-stone-700 text-white text-xs uppercase tracking-wider rounded px-2.5 py-2 placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400 font-bold">
-                        <button @click="applyPromo()" class="bg-amber-500 hover:bg-amber-600 text-stone-900 text-xs font-bold px-3 py-2 rounded transition">Einlösen</button>
+                        <input type="text" x-model="promoInput" @keyup.enter="applyPromo()" placeholder="Code eingeben" class="flex-1 bg-stone-700 text-white text-xs uppercase tracking-wider rounded px-2.5 py-2 placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400 font-bold">
+                        <button @click="applyPromo()" class="bg-amber-500 hover:bg-amber-600 text-stone-900 text-xs font-bold px-3 py-2 rounded transition">{{ cfg.t.promo_redeem }}</button>
                     </div>
-                    <p x-show="promoError" x-cloak class="text-[10px] text-red-300 mt-1.5 flex items-center gap-1"><i data-lucide="alert-circle" class="lucide w-3 h-3"></i> <span x-text="promoError"></span></p>
+                    <p x-show="promoError" x-cloak class="text-[10px] text-red-300 mt-1.5 flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-3 h-3">{{ icSvg['alert-circle']|raw }}</svg> <span x-text="promoError"></span></p>
                 </div>
 
                 {# Aktiver Rabattcode-Badge #}
                 <div x-show="promoApplied" x-cloak class="bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg px-3 py-2 mb-3 flex items-center gap-2 shadow">
-                    <i data-lucide="gift" class="lucide w-4 h-4"></i>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-4 h-4">{{ icSvg['gift']|raw }}</svg>
                     <span class="font-extrabold text-sm tracking-wide" x-text="promo.code"></span>
                     <span class="text-xs">·</span>
                     <span class="text-xs flex-1" x-text="promo.label"></span>
-                    <span class="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-semibold">automatisch im Warenkorb</span>
-                    <button @click="removePromo()" class="text-white/80 hover:text-white"><i data-lucide="x" class="lucide w-3.5 h-3.5"></i></button>
+                    <span class="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-semibold">{{ cfg.t.btn_cart_added }}</span>
+                    <button @click="removePromo()" class="text-white/80 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-3.5 h-3.5">{{ icSvg['x']|raw }}</svg></button>
                 </div>
 
                 <div class="flex items-start justify-between mb-3 gap-3 flex-wrap">
                     <div class="flex-1">
                         <p class="text-[10px] uppercase tracking-wider text-white/60 font-bold">
-                            Gesamt netto<span x-show="promoApplied" x-cloak> · mit <span x-text="promo.code"></span></span>
+                            {{ cfg.t.cart_gesamt_netto }}<span x-show="promoApplied" x-cloak> · {{ cfg.t.cart_mit }} <span x-text="promo.code"></span></span>
                         </p>
                         <div class="flex items-baseline gap-2 mt-1">
                             <p class="text-3xl font-extrabold num" :class="promoApplied ? 'text-amber-300' : 'text-white'"
@@ -352,78 +418,78 @@
                             <p x-show="promoApplied" x-cloak class="text-base text-white/50 line-through num" x-text="formatPrice(calcGesamt())"></p>
                         </div>
                         <p class="text-[10px] text-white/60 mt-0.5 num">
-                            <span x-text="`${formatPrice(calcStueckpreis())} / Dose × ${quantity}`"></span> = <span x-text="formatPrice(calcStueckpreis() * quantity)"></span>
-                            <span x-show="promoApplied" x-cloak>· Sie sparen <span class="text-amber-300 font-semibold" x-text="formatPrice(calcRabatt())"></span></span>
+                            <span x-text="`${formatPrice(calcStueckpreis())} / ${cfg.t.cart_dose} × ${quantity}`"></span> = <span x-text="formatPrice(calcStueckpreis() * quantity)"></span>
+                            <span x-show="promoApplied" x-cloak>· {{ cfg.t.cart_sie_sparen }} <span class="text-amber-300 font-semibold" x-text="formatPrice(calcRabatt())"></span></span>
                         </p>
                     </div>
                     <div class="text-right">
-                        <p class="text-[10px] uppercase tracking-wider text-white/60 font-bold">Lieferung</p>
-                        <p class="text-xs font-bold flex items-center gap-1 justify-end mt-1"><i data-lucide="truck" class="lucide w-3.5 h-3.5"></i> 2–3 Wochen</p>
+                        <p class="text-[10px] uppercase tracking-wider text-white/60 font-bold">{{ cfg.t.delivery_label }}</p>
+                        <p class="text-xs font-bold flex items-center gap-1 justify-end mt-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-3.5 h-3.5">{{ icSvg['truck']|raw }}</svg> {{ cfg.t.delivery_value }}</p>
                     </div>
                 </div>
 
                 {# Aufschlüsselung Dosen-Kosten #}
                 <div class="border-t border-white/10 pt-2.5 space-y-1 text-[11px] mb-3">
-                    <p class="text-[9px] uppercase tracking-wider text-white/40 font-bold mb-1">Dosen-Kosten · <span x-text="quantity"></span> × <span x-text="formatPrice(calcStueckpreis())"></span></p>
+                    <p class="text-[9px] uppercase tracking-wider text-white/40 font-bold mb-1">{{ cfg.t.cart_breakdown }} · <span x-text="quantity"></span> × <span x-text="formatPrice(calcStueckpreis())"></span></p>
                     <div class="flex justify-between text-white/80">
-                        <span><span x-text="cfg.wd"></span> · Dose (Basis)</span>
+                        <span><span x-text="cfg.productNumber"></span> · {{ cfg.t.cart_base }}</span>
                         <span class="num font-semibold" x-text="`${formatPrice(wdPrice())} × ${quantity} = ${formatPrice(wdPrice() * quantity)}`"></span>
                     </div>
                     <div x-show="options[0].on" class="flex justify-between text-white/80">
-                        <span>+ Lasergravur</span>
+                        <span>+ {{ cfg.t.laser_title }}</span>
                         <span class="num font-semibold" x-text="`${formatPrice(laserPrice())} × ${quantity} = ${formatPrice(laserPrice() * quantity)}`"></span>
                     </div>
                     <div x-show="options[1].on" class="flex justify-between text-white/80">
-                        <span>+ Ritter Sport (<span x-text="cfg.maxRiegel"></span>×)</span>
+                        <span>+ {{ cfg.t.fuellung_title }} (<span x-text="cfg.maxRiegel"></span>×)</span>
                         <span class="num font-semibold" x-text="`${formatPrice(cfg.maxRiegel * cfg.fixedPrices.rsw)} × ${quantity} = ${formatPrice(cfg.maxRiegel * cfg.fixedPrices.rsw * quantity)}`"></span>
                     </div>
                     <div x-show="options[2].on" class="flex justify-between text-white/80">
-                        <span>+ Verpackung (<span x-text="verpackungVariant === 'plano' ? 'plano' : 'konfektioniert'"></span>)</span>
+                        <span>+ {{ cfg.t.verpackung_title }} (<span x-text="verpackungVariant === 'plano' ? 'plano' : 'konf.'"></span>)</span>
                         <span class="num font-semibold" x-text="`${formatPrice(currentVerpackungPrice())} × ${quantity} = ${formatPrice(currentVerpackungPrice() * quantity)}`"></span>
                     </div>
                     <div class="flex justify-between font-bold text-white border-t border-white/10 pt-1.5 mt-1.5">
-                        <span>Summe Dosen-Kosten</span>
+                        <span>{{ cfg.t.cart_sum_dosen }}</span>
                         <span class="num" x-text="formatPrice(calcStueckpreis() * quantity)"></span>
                     </div>
                 </div>
 
                 {# Aufschlüsselung Einmalkosten #}
                 <div x-show="calcEinmalkosten() > 0" x-cloak class="border-t border-white/10 pt-2.5 space-y-1 text-[11px] mb-3">
-                    <p class="text-[9px] uppercase tracking-wider text-white/40 font-bold mb-1">Einmalkosten</p>
+                    <p class="text-[9px] uppercase tracking-wider text-white/40 font-bold mb-1">{{ cfg.t.cart_einmalkosten }}</p>
                     <div x-show="options[0].on" class="flex justify-between text-white/80">
-                        <span>NK LG · Maschinenrüstung</span>
+                        <span>NK LG · {{ cfg.t.laser_machine_setup }}</span>
                         <span class="num font-semibold" x-text="formatPrice(cfg.fixedPrices.nkLgMaschine)"></span>
                     </div>
                     <div x-show="options[0].on && laser.personalisierung" class="flex justify-between text-white/80">
-                        <span>NK PERS · Personalisierung</span>
+                        <span>NK PERS · {{ cfg.t.laser_personalization }}</span>
                         <span class="num font-semibold" x-text="`+ ${formatPrice(cfg.fixedPrices.nkPersonalisierung)}`"></span>
                     </div>
                     <div x-show="options[1].on && karteVariant === 'persoenlich'" class="flex justify-between text-white/80">
-                        <span>Karte mit pers. Text</span>
+                        <span>{{ cfg.t.card_custom }}</span>
                         <span class="num font-semibold" x-text="`+ ${formatPrice(cfg.fixedPrices.karteText)}`"></span>
                     </div>
                     <div class="flex justify-between font-bold text-white border-t border-white/10 pt-1.5 mt-1.5">
-                        <span>Summe Einmalkosten</span>
+                        <span>{{ cfg.t.cart_sum_einmal }}</span>
                         <span class="num" x-text="`+ ${formatPrice(calcEinmalkosten())}`"></span>
                     </div>
                 </div>
 
                 <button type="button" @click="addToCart()" :disabled="busy"
-                        class="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-black text-sm font-bold py-3 rounded transition flex items-center justify-center gap-2">
-                    <i data-lucide="shopping-cart" class="lucide w-4 h-4" x-show="!busy"></i>
-                    <i data-lucide="loader-2" class="lucide w-4 h-4 animate-spin" x-show="busy" x-cloak></i>
-                    <span x-show="!busy">In den Warenkorb · <span x-text="`${quantity} Dosen`"></span></span>
-                    <span x-show="busy" x-cloak>Bitte warten…</span>
+                        class="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-bold py-3 rounded transition flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-4 h-4" x-show="!busy">{{ icSvg['shopping-cart']|raw }}</svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-4 h-4 animate-spin" x-show="busy" x-cloak>{{ icSvg['loader-2']|raw }}</svg>
+                    <span x-show="!busy">{{ cfg.t.btn_cart_add }} · <span x-text="`${quantity} ${cfg.t.qty_doses}`"></span></span>
+                    <span x-show="busy" x-cloak>{{ cfg.t.btn_cart_add_busy }}</span>
                 </button>
                 <p x-show="cartError" x-cloak x-text="cartError" class="text-[11px] text-red-400 mt-2 text-center"></p>
                 <p x-show="cartSuccess" x-cloak class="text-[11px] text-green-400 mt-2 text-center flex items-center justify-center gap-1">
-                    <i data-lucide="check-circle-2" class="lucide w-3.5 h-3.5"></i>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-3.5 h-3.5">{{ icSvg['check-circle-2']|raw }}</svg>
                     <span x-text="cartSuccess"></span>
                 </p>
             </div>
 
             <p class="text-[10px] text-stone-500 text-center my-2">
-                zzgl. 19% MwSt. · zzgl. Versand · PDF-Freigabe vor Produktion
+                {{ cfg.t.cart_zzgl }}
             </p>
         </div>
     </div>
@@ -447,20 +513,20 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
         laser: { personalisierung: false },
 
         options: [
-            { key:'laser',      on:true,  title:'Lasergravur',       subtitle:'Ihr Logo/Motiv gelasert · ab 1 Karton',     price:0,
+            { key:'laser',      on:true,  title:cfg.t.laser_title,       subtitle:cfg.t.laser_subtitle,        price:0,
               tile:'https://shop.doseplus.de/media/0f/85/b6/1765701743/doseplus-Laser-DE.png' },
-            { key:'fuellung',   on:true,  title:'Ritter Sport Mini', subtitle:'4-Sorten-Mix · inkl. Weihnachtskarte', price:0,
-              tile:'https://shop.doseplus.de/media/e4/g0/49/1778056909/dosenzauber-rittersport-befuellung-01.png' },
-            { key:'verpackung', on:true,  title:'Umverpackung',      subtitle:'Plano oder konfektioniert',            price: cfg.fixedPrices.ukKonfektioniert,
+            { key:'fuellung',   on:true,  title:cfg.t.fuellung_title,    subtitle:cfg.t.fuellung_subtitle,     price:0,
+              tile:'https://shop.doseplus.de/media/6a/74/1d/1778781144/doseplus-helper-rsw-real.jpg?v=2' },
+            { key:'verpackung', on:true,  title:cfg.t.verpackung_title,  subtitle:cfg.t.verpackung_subtitle,   price: cfg.fixedPrices.ukKonfektioniert,
               tile:'https://shop.doseplus.de/media/7f/ca/9c/1775139337/doseplus-umkarton-DE.png' },
         ],
         karteVarianten: [
-            { value:'standard',    label:'Karte mit Dosenmotiv',        hint:'Passend zum Dosen-Design',                 price:0 },
-            { value:'persoenlich', label:'Karte mit persönlichem Text', hint:'Eigener Wunschtext, max. 450 Zeichen',    price: cfg.fixedPrices.karteText },
+            { value:'standard',    label:cfg.t.card_default, hint:cfg.t.card_default_hint, price:0 },
+            { value:'persoenlich', label:cfg.t.card_custom,  hint:cfg.t.card_custom_hint,  price: cfg.fixedPrices.karteText },
         ],
         verpackungVarianten: [
-            { value:'plano',         label:'Plano beigelegt',          hint:'Karton flach, Kunde packt',   price: cfg.fixedPrices.ukPlano },
-            { value:'konfektioniert',label:'Komplett versandfertig',   hint:'Dose im Karton verpackt',     price: cfg.fixedPrices.ukKonfektioniert },
+            { value:'plano',         label:cfg.t.verp_plano, hint:cfg.t.verp_plano_hint, price: cfg.fixedPrices.ukPlano },
+            { value:'konfektioniert',label:cfg.t.verp_konf,  hint:cfg.t.verp_konf_hint,  price: cfg.fixedPrices.ukKonfektioniert },
         ],
         // Bekannte Rabattcodes — Backend validiert beim Cart-Add nochmal
         // Bekannte Codes nur für Vorschau-Rabatt im Konfigurator. Tatsächliche Validierung
@@ -468,11 +534,15 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
         // Unbekannte Codes werden trotzdem akzeptiert und ans Backend geschickt — dort
         // entscheidet Shopware. Bekannte Codes hier müssen mit Shopware-Promotions
         // namentlich übereinstimmen, sonst sieht der Kunde Preview-Rabatt aber keinen echten.
+        // 2026-05-18: 4 neue Promo-Codes ersetzen XMAS20/WEIHNACHTEN20/DOSENZAUBER10/B2B15.
+        // Code-Namen verraten den Rabatt-Wert NICHT mehr ("XMAS20" hat 20% kommuniziert).
+        // WICHTEL (5%) ist auto-applied ohne Code — nicht in der Vorschau-Liste.
         knownPromos: {
-            'XMAS20':       { rabatt: 0.20, label: '20% Weihnachts-Rabatt (Vorschau)' },
-            'WEIHNACHTEN20':{ rabatt: 0.20, label: '20% Weihnachts-Rabatt (Vorschau)' },
-            'DOSENZAUBER10':{ rabatt: 0.10, label: '10% Dosenzauber-Rabatt (Vorschau)' },
-            'B2B15':        { rabatt: 0.15, label: '15% B2B-Rabatt (Vorschau)' },
+            'TANNENZAUBER':     { rabatt: 0.10, label: 'Aktionsrabatt (Vorschau)' },
+            'STERNENGLANZ':     { rabatt: 0.15, label: 'Geschäftskunden-Rabatt (Vorschau)' },
+            'MITTERNACHTSGOLD': { rabatt: 0.20, label: 'Premium-Rabatt (Vorschau)' },
+            // Alte Codes bleiben fallback-kompatibel falls Steffen sie noch nutzt:
+            'XMAS20':           { rabatt: 0.20, label: 'Weihnachts-Rabatt (Vorschau)' },
         },
         promoInput: '',
         promoError: '',
@@ -485,7 +555,7 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             if (idx === 1 && !this.options[1].on && this.verpackungVariant === 'konfektioniert') {
                 this.verpackungVariant = 'plano';
             }
-            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+            // Lucide-Lib entfernt — Icons sind jetzt Inline-SVG, kein createIcons() nötig
         },
 
         // ab >1050 Dosen: individuelles Angebot statt Auto-Preis (Puffer von 50 Stück über 1000)
@@ -549,7 +619,7 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             }
             this.promoApplied = true;
             this.promoInput = '';
-            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+            // Lucide-Lib entfernt — Icons sind jetzt Inline-SVG, kein createIcons() nötig
         },
         removePromo() {
             this.promoApplied = false;
@@ -558,7 +628,17 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             this.promoError = '';
         },
 
-        formatPrice(n) { return typeof n !== 'number' || isNaN(n) ? '—' : new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n); },
+        formatPrice(n) {
+            if (typeof n !== 'number' || isNaN(n)) return '—';
+            // Currency-Factor anwenden: rsw/nkLgMaschine etc. sind in EUR gespeichert, müssen ggf. konvertiert werden
+            const value = n * (this.cfg.currencyFactor || 1);
+            // Locale-Mapping: gsw-CH wird von vielen Browsern nicht unterstützt → de-CH
+            let locale = (this.cfg.locale || 'de-DE').replace('_','-');
+            if (locale.toLowerCase().startsWith('gsw')) locale = 'de-CH';
+            const currency = this.cfg.currency || 'EUR';
+            try { return new Intl.NumberFormat(locale, {style:'currency', currency}).format(value); }
+            catch(e) { return new Intl.NumberFormat('de-DE', {style:'currency', currency:'EUR'}).format(value); }
+        },
         updateSlider(e) {
             const t = e.target, min = +t.min, max = +t.max, val = +t.value;
             t.style.setProperty('--val', ((val-min)/(max-min)*100) + '%');
@@ -577,7 +657,7 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             const f = e.target.files[0]; if (!f) return;
             this.logoFile = f;
             const r = new FileReader(); r.onload = ev => this.logoPreview = ev.target.result; r.readAsDataURL(f);
-            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+            // Lucide-Lib entfernt — Icons sind jetzt Inline-SVG, kein createIcons() nötig
         },
         onLogoDrop(e) {
             const f = e.dataTransfer.files[0]; if (!f) return;
@@ -588,8 +668,33 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
 
         async addToCart() {
             if (this.busy) return;
+
+            // Validierung: Karte-mit-pers-Text aber Textfeld leer → Auto-Fallback auf Standard-Karte
+            // (Sonst zahlt Kunde 125€ für leere Karte)
+            if (this.options[1].on && this.karteVariant === 'persoenlich' && !this.karteText.trim()) {
+                this.karteVariant = 'standard';
+            }
+
             this.busy = true;
             this.cartError = '';
+
+            // Bestandsbuchungs-Hinweise für Backend (Theilich 2026-05-18 Punkte 3+4+5):
+            // - WD/DZ-SKU bei jeder Bestellung abbuchen
+            // - WKN bei neutraler Karte abbuchen (Punkt 4)
+            // - WKI bei persönlichem Text als Sonderanfertigung – KEIN WKN-Abzug (Punkt 5)
+            // - UV (plano + konfektioniert) teilen einen SKU (Punkt 2)
+            const stockMovements = [
+                { sku: this.cfg.wd || this.cfg.productNumber, qty: this.quantity, role: 'dose' },
+            ];
+            if (this.options[1].on && this.karteVariant !== 'persoenlich' && this.cfg.wkn) {
+                stockMovements.push({ sku: this.cfg.wkn, qty: this.quantity, role: 'karte-neutral' });
+            }
+            if (this.options[2].on && this.cfg.uvNumber) {
+                stockMovements.push({ sku: this.cfg.uvNumber, qty: this.quantity, role: 'umverpackung' });
+            }
+            const sonderanfertigung = (this.options[1].on && this.karteVariant === 'persoenlich' && this.cfg.wki)
+                ? { sku: this.cfg.wki, qty: this.quantity, text: this.karteText }
+                : null;
 
             const payload = {
                 productId: this.cfg.productId,
@@ -614,6 +719,9 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
                     karteText: this.karteVariant === 'persoenlich' ? this.karteText : null,
                 },
                 verpackung: this.verpackungVariant,
+                konfektionierung: this.verpackungVariant === 'konfektioniert',
+                stockMovements: stockMovements,
+                sonderanfertigung: sonderanfertigung,
                 promo: this.promoApplied ? this.promo : null,
             };
 

@@ -6,7 +6,7 @@
 
 {% block component_line_item_remove %}
     {% if lineItem.payload.dpDosenzauberConfig is defined %}
-        {# WD-Hauptprodukt: × entfernt die GANZE Konfiguration (WD + alle NK) #}
+        {# DZ-Hauptprodukt: × entfernt die GANZE Konfiguration (DZ + alle NK) #}
         <form action="{{ path('frontend.dosenzauber.remove-config', { lineItemId: lineItem.id }) }}"
               method="post"
               data-form-submit-loader="true"

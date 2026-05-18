@@ -11,6 +11,10 @@
                     Dosenzauber-Konfiguration: {{ item.label }}
                 </h3>
 
+                <div v-if="dpProductCover(item)" class="dp-cfg-admin-product-image">
+                    <img :src="dpProductCover(item)" :alt="item.label">
+                </div>
+
                 <div class="dp-cfg-admin-row">
                     <strong>Produkt-Nr.:</strong>
                     <span>{{ dpConfig(item).productNumber }}</span>

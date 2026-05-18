@@ -3,7 +3,7 @@
   "description": "Doseplus Dosenzauber Veredelungs-Konfigurator (Lasergravur, Ritter-Sport-Befüllung, Versandverpackung)",
   "type": "shopware-platform-plugin",
   "license": "proprietary",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "authors": [
     { "name": "Doseplus / Noah Füllenbach" }
   ],
