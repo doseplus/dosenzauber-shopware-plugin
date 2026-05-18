@@ -85,6 +85,17 @@ class DosenzauberController extends StorefrontController
                 return new JsonResponse(['ok' => false, 'error' => 'Produkt ist kein Dosenzauber-Produkt'], 400);
             }
 
+            // Theilich 2026-05-18 Bug 1: Stock-Defense im Backend — falls Frontend-Check
+            // umgangen wird, schicken wir hier einen klaren 409-Fehler statt eine
+            // Konfiguration ohne Dose im Cart anzulegen.
+            $availableStock = (int) ($product->getAvailableStock() ?? 0);
+            if ($availableStock <= 0) {
+                return new JsonResponse([
+                    'ok'    => false,
+                    'error' => 'Diese Dose ist aktuell ausverkauft.',
+                ], 409);
+            }
+
             $cart = $this->cartService->getCart($context->getToken(), $context);
 
             // Konfigurations-Gruppen-ID, damit zusammengehörige LineItems später
@@ -144,6 +155,38 @@ class DosenzauberController extends StorefrontController
                 try {
                     $promotionItem = (new PromotionItemBuilder())->buildPlaceholderItem($promoCode);
                     $cart = $this->cartService->add($cart, $promotionItem, $context);
+
+                    // Theilich 2026-05-18 Bug 5: Doppelter Rabatt verhindern.
+                    // Wenn jetzt MEHRERE aktive Promotion-LineItems im Cart sind (z.B. weil
+                    // schon eine automatische Promotion lief), behalten wir nur den größten
+                    // Rabatt — alle anderen Promotions werden entfernt.
+                    $promoLineItems = $cart->getLineItems()->filter(fn(LineItem $li) => $li->getType() === 'promotion');
+                    if ($promoLineItems->count() > 1) {
+                        // Größter Discount = niedrigste (negativste) totalPrice
+                        $bestPromoId = null;
+                        $bestDiscount = 0.0;
+                        foreach ($promoLineItems as $li) {
+                            $price = $li->getPrice()?->getTotalPrice() ?? 0.0;
+                            if ($price < $bestDiscount) {
+                                $bestDiscount = $price;
+                                $bestPromoId = $li->getId();
+                            }
+                        }
+                        $removedCodes = [];
+                        foreach ($promoLineItems as $li) {
+                            if ($li->getId() !== $bestPromoId) {
+                                $code = $li->getReferencedId() ?: ($li->getPayload()['code'] ?? '');
+                                $removedCodes[] = (string) $code;
+                                $cart = $this->cartService->remove($cart, $li->getId(), $context);
+                            }
+                        }
+                        if (!empty($removedCodes)) {
+                            $this->logger->info('Dosenzauber Promo-Filter: nur größten Rabatt behalten', [
+                                'kept'    => $bestPromoId,
+                                'removed' => $removedCodes,
+                            ]);
+                        }
+                    }
 
                     // Shopware schreibt bei ungültigem Code einen Error in den Cart,
                     // aber bei erfolgreichem Code ein Notice ("Discount X has been added") —

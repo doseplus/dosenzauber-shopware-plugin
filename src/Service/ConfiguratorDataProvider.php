@@ -132,6 +132,13 @@ class ConfiguratorDataProvider
             }
         }
 
+        // Theilich 2026-05-18 Bug 1: Stock-Check für DZ-Hauptartikel.
+        // Wenn der DZ-Artikel ausverkauft ist, soll der Konfigurator das anzeigen
+        // und den Cart-Add-Button sperren — sonst landen Konfigurationen ohne
+        // Dose im Warenkorb die sich nicht mehr löschen lassen.
+        $availableStock = (int) ($product->getAvailableStock() ?? 0);
+        $stockAvailable = $availableStock > 0;
+
         return [
             'productId'      => $product->getId(),
             'productNumber'  => $dzNumber,
@@ -141,6 +148,8 @@ class ConfiguratorDataProvider
             'currency'       => $currencyCode,
             'currencyFactor' => $currencyFactor,
             't'              => $this->translations->for($locale),
+            'stockAvailable' => $stockAvailable,
+            'availableStock' => $availableStock,
         ];
     }
 

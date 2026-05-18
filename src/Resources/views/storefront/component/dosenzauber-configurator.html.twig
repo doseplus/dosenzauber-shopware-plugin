@@ -33,6 +33,15 @@
   .product-detail-form-container,
   .pdfexport-btn-product { display: none !important; }
 
+  /* Theilich 2026-05-18 Bug 4: Shopware-Standard-Lieferzeit-Anzeige bei DZ-Produkten
+     ausblenden — Konfigurator hat eigene Lieferzeit-Anzeige "2-3 Wochen". Doppelte
+     Lieferzeit-Hinweise verwirren den Kunden. */
+  .product-detail-buy .product-detail-delivery-information,
+  .product-detail-buy .delivery-information,
+  .product-detail-buy [class*="delivery-information"],
+  .product-detail-buy .product-delivery-information,
+  .product-detail-buy .delivery-time { display: none !important; }
+
   /* Margin-Compression: Konfigurator + Contact-Box sitzen jetzt im selben Container,
      daher die default Bootstrap-Margins zwischen ihnen entfernen. */
   .product-detail-buy .dp-cfg-injected { margin: 8px 0 8px 0 !important; }
@@ -108,6 +117,19 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
             <h2 class="text-lg leading-tight">{{ cfg.t.heading }}</h2>
             <p class="text-xs text-stone-500">{{ cfg.t.subheading }}</p>
         </header>
+
+        {# Theilich 2026-05-18 Bug 1: Out-Of-Stock-Warnung wenn DZ-Hauptartikel ausverkauft.
+           Konfigurator wird grau + Cart-Add-Button gesperrt — verhindert dass Konfigurationen
+           ohne Dose im Warenkorb landen. #}
+        {% if cfg.stockAvailable is defined and not cfg.stockAvailable %}
+        <div class="px-5 py-4 bg-amber-50 border-b-2 border-amber-300 flex items-start gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-5 h-5 text-amber-700 shrink-0 mt-0.5">{{ icSvg['alert-triangle']|raw }}</svg>
+            <div>
+                <p class="font-bold text-sm text-amber-900 leading-tight">Diese Dose ist aktuell ausverkauft</p>
+                <p class="text-xs text-amber-900/80 mt-1 leading-snug">Sie können den Konfigurator zur Vorbereitung nutzen, eine Bestellung ist aktuell aber leider nicht möglich. Bei Interesse melden Sie sich gerne über das Kontaktformular oder per Telefon — wir prüfen die Verfügbarkeit für Sie.</p>
+            </div>
+        </div>
+        {% endif %}
 
         <div class="p-5 space-y-3">
 
@@ -474,11 +496,15 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                     </div>
                 </div>
 
-                <button type="button" @click="addToCart()" :disabled="busy"
-                        class="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-bold py-3 rounded transition flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-4 h-4" x-show="!busy">{{ icSvg['shopping-cart']|raw }}</svg>
+                {# Theilich 2026-05-18 Bug 1: Stock-Check via cfg.stockAvailable. Wenn ausverkauft → Button disabled. #}
+                <button type="button" @click="addToCart()" :disabled="busy || !cfg.stockAvailable"
+                        :title="!cfg.stockAvailable ? 'Diese Dose ist aktuell ausverkauft' : ''"
+                        class="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold py-3 rounded transition flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-4 h-4" x-show="!busy && cfg.stockAvailable">{{ icSvg['shopping-cart']|raw }}</svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-4 h-4" x-show="!cfg.stockAvailable">{{ icSvg['lock']|raw }}</svg>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-4 h-4 animate-spin" x-show="busy" x-cloak>{{ icSvg['loader-2']|raw }}</svg>
-                    <span x-show="!busy">{{ cfg.t.btn_cart_add }} · <span x-text="`${quantity} ${cfg.t.qty_doses}`"></span></span>
+                    <span x-show="!busy && cfg.stockAvailable">{{ cfg.t.btn_cart_add }} · <span x-text="`${quantity} ${cfg.t.qty_doses}`"></span></span>
+                    <span x-show="!cfg.stockAvailable">Aktuell ausverkauft</span>
                     <span x-show="busy" x-cloak>{{ cfg.t.btn_cart_add_busy }}</span>
                 </button>
                 <p x-show="cartError" x-cloak x-text="cartError" class="text-[11px] text-red-400 mt-2 text-center"></p>
@@ -668,6 +694,13 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
 
         async addToCart() {
             if (this.busy) return;
+
+            // Theilich 2026-05-18 Bug 1: Stock-Defense — falls jemand den HTML-Disable
+            // umgeht (z.B. via DevTools), fängt das JS hier ab.
+            if (!this.cfg.stockAvailable) {
+                this.cartError = 'Diese Dose ist aktuell ausverkauft.';
+                return;
+            }
 
             // Validierung: Karte-mit-pers-Text aber Textfeld leer → Auto-Fallback auf Standard-Karte
             // (Sonst zahlt Kunde 125€ für leere Karte)
