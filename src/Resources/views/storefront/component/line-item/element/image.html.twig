@@ -1,0 +1,20 @@
+{% sw_extends '@Storefront/storefront/component/line-item/element/image.html.twig' %}
+
+{#
+   Theilich 2026-05-19 Bug 4: Custom-Line-Items (Blankomuster, Vorabveredelungsmuster)
+   bekommen ihr Cover-Bild via Payload mitgegeben (dpBlankomuster.coverUrl /
+   dpVorabmuster.coverUrl). Hier rendern wir das wenn vorhanden.
+#}
+
+{% block component_line_item_image_picture %}
+    {% set dpCoverUrl = lineItem.payload.dpBlankomuster.coverUrl|default(lineItem.payload.dpVorabmuster.coverUrl|default(null)) %}
+    {% if dpCoverUrl %}
+        <img src="{{ dpCoverUrl }}"
+             alt="{{ lineItem.label }}"
+             class="line-item-img"
+             loading="lazy"
+             style="object-fit: cover; width: 100%; height: 100%; border-radius: 4px;">
+    {% else %}
+        {{ parent() }}
+    {% endif %}
+{% endblock %}

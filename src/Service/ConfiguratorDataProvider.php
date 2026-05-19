@@ -94,6 +94,41 @@ class ConfiguratorDataProvider
     /** @var array<string,int> cache WD-SKU → available_stock (in-memory per Request) */
     private array $wdStockCache = [];
 
+    /**
+     * Theilich 2026-05-19: Versand-Logik pro Sales-Channel.
+     * VE = Verpackungseinheit (= Karton). quantity / kartonSize = veCount.
+     * Bei Sales-Channel-IDs für FR + PL → null zurück = Konfigurator wird nicht gerendert
+     * (Dosenzauber wird dort nicht angeboten).
+     */
+    private const SALES_CHANNEL_SHIPPING = [
+        '01960fc78e8672128d6df340d6f236f1' => ['country' => 'DE', 'currency' => 'EUR', 'tiers' => [
+            ['maxVe' => 10, 'perVe' => 7.75, 'method' => 'DHL'],
+            ['maxVe' => null, 'flat' => 85.00, 'method' => 'Spedition'],
+        ]],
+        '01973cb4aba97d91ad815bac03e90a9f' => ['country' => 'COM', 'currency' => 'EUR', 'tiers' => [
+            ['maxVe' => 10, 'perVe' => 7.75, 'method' => 'DHL'],
+            ['maxVe' => null, 'flat' => 85.00, 'method' => 'Spedition'],
+        ]],
+        '01960fc78ffa72ab8094df767a26e7a3' => ['country' => 'AT', 'currency' => 'EUR', 'tiers' => [
+            ['maxVe' => 6,  'flat' => 9.95,  'method' => 'DHL'],
+            ['maxVe' => 14, 'flat' => 14.00, 'method' => 'DHL'],
+            ['maxVe' => 20, 'flat' => 85.00, 'method' => 'Spedition'],
+            ['maxVe' => 30, 'flat' => 120.00,'method' => 'Spedition'],
+            ['maxVe' => null,'flat' => 180.00,'method' => 'Spedition'],
+        ]],
+        '01960fc78f8b738e9d80151dd2fbbfac' => ['country' => 'CH', 'currency' => 'CHF', 'tiers' => [
+            ['maxVe' => 9,  'perVe' => 13.50, 'method' => 'Standard'],
+            ['maxVe' => null, 'flat' => 135.00, 'method' => 'Spedition'],
+        ]],
+        // FR + PL: KEIN Eintrag → Konfigurator wird ausgeblendet
+    ];
+
+    /** Sales-Channel-IDs auf denen Dosenzauber NICHT angeboten wird (FR + PL). */
+    private const SALES_CHANNELS_DISABLED = [
+        '01960fc78f2a7212ba8b42247eb19a87', // PL
+        '01960fc78f6971b5859a04634844a6b0', // FR
+    ];
+
     public function __construct(
         private readonly LoggerInterface $logger,
         private readonly ConfiguratorTranslations $translations,
@@ -137,6 +172,15 @@ class ConfiguratorDataProvider
         $number = $product->getProductNumber();
         if (!$number) return null;
 
+        // Theilich 2026-05-19: Dosenzauber wird in FR + PL nicht angeboten.
+        // Konfigurator wird auf diesen Sales-Channels nicht gerendert.
+        if ($context) {
+            $scId = $context->getSalesChannelId();
+            if (in_array($scId, self::SALES_CHANNELS_DISABLED, true)) {
+                return null;
+            }
+        }
+
         if (isset(self::STATIC_DATA[$number])) {
             return $this->buildData($product, $number, $context);
         }
@@ -175,6 +219,13 @@ class ConfiguratorDataProvider
         $availableStock = $this->getWdStock($data['wd']);
         $stockAvailable = $availableStock > 0;
 
+        // Theilich 2026-05-19: Versand-Info pro Sales-Channel.
+        $shipping = null;
+        if ($context) {
+            $scId = $context->getSalesChannelId();
+            $shipping = self::SALES_CHANNEL_SHIPPING[$scId] ?? null;
+        }
+
         return [
             'productId'      => $product->getId(),
             'productNumber'  => $dzNumber,
@@ -186,6 +237,7 @@ class ConfiguratorDataProvider
             't'              => $this->translations->for($locale),
             'stockAvailable' => $stockAvailable,
             'availableStock' => $availableStock,
+            'shipping'       => $shipping,
         ];
     }
 

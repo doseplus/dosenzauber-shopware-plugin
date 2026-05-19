@@ -102,8 +102,17 @@ class DosenzauberController extends StorefrontController
             $productNumber = trim((string)($data['productNumber'] ?? ''));
             $wdSku  = trim((string)($data['wdSku'] ?? ''));
             $wknSku = trim((string)($data['wknSku'] ?? ''));
+            $productId = trim((string)($data['productId'] ?? ''));
             if ($productNumber === '' || $wdSku === '') {
                 return new JsonResponse(['ok' => false, 'error' => 'productNumber + wdSku required'], 400);
+            }
+            // Cover-URL aus DZ-Produkt für Cart-Item-Bild (Theilich 2026-05-19 Bug 4)
+            $coverUrl = null;
+            if ($productId !== '') {
+                $dzProduct = $this->loadProductById($productId, $context);
+                if ($dzProduct) {
+                    $coverUrl = $dzProduct->getCover()?->getMedia()?->getUrl();
+                }
             }
             $cart = $this->cartService->getCart($context->getToken(), $context);
             // Custom LineItem 4€ pauschal — Standard-removable.
@@ -119,6 +128,7 @@ class DosenzauberController extends StorefrontController
             $li->setPrice($price);
             $li->setPayloadValue('dpBlankomuster', [
                 'forProduct' => $productNumber,
+                'coverUrl'   => $coverUrl,
                 'stockMovements' => [
                     ['sku' => $wdSku,  'qty' => 1, 'role' => 'dose-blanko'],
                     ['sku' => $wknSku, 'qty' => 1, 'role' => 'karte-neutral'],
@@ -265,6 +275,7 @@ class DosenzauberController extends StorefrontController
                 $cfgData2 = $this->dataProvider->getDataForProduct($product, $context) ?? [];
                 $vmLi->setPayloadValue('dpVorabmuster', [
                     'forProduct'     => $product->getProductNumber(),
+                    'coverUrl'       => $product->getCover()?->getMedia()?->getUrl(),
                     'logoFileName'   => $data['laser']['logoFileName'] ?? null,
                     'stockMovements' => [
                         ['sku' => $cfgData2['wd']  ?? '', 'qty' => 1, 'role' => 'dose-vorabmuster'],

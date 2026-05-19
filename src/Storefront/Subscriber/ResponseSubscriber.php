@@ -50,12 +50,44 @@ class ResponseSubscriber implements EventSubscriberInterface
 
     /**
      * Pre-render: prüft ob wir auf einer Produktseite mit Dosenzauber-Produkt sind
-     * und merkt sich die nötigen Daten für die Response-Injection.
+     * ODER auf einer Cart-Seite mit DZ-Items — und merkt sich die nötigen Daten für
+     * die Response-Injection.
      */
     public function onStorefrontRender(StorefrontRenderEvent $event): void
     {
         $request = $event->getRequest();
         $routeName = (string) $request->attributes->get('_route', '');
+
+        // Cart-Routes: Header mit Lieferzeit-Hinweis + Clear-Button injizieren.
+        // Theilich 2026-05-19: Twig-Override für page_checkout_cart_header greift
+        // wegen Theme-Inheritance nicht — Subscriber-Inject ist robuster.
+        if (in_array($routeName, ['frontend.checkout.cart.page', 'frontend.cart.offcanvas'], true)) {
+            $parameters = $event->getParameters();
+            $cart = $parameters['cart'] ?? ($parameters['page']->getCart() ?? null);
+            if (is_object($cart) && method_exists($cart, 'getLineItems')) {
+                $hasDpGravur = false;
+                $hasAnyItem = false;
+                foreach ($cart->getLineItems() as $li) {
+                    $hasAnyItem = true;
+                    $payload = $li->getPayload();
+                    if (isset($payload['dpDosenzauberConfig']['options']['laser']) && $payload['dpDosenzauberConfig']['options']['laser']) {
+                        $hasDpGravur = true;
+                    }
+                    if (isset($payload['dpVorabmuster'])) {
+                        $hasDpGravur = true;
+                    }
+                }
+                if ($hasAnyItem) {
+                    $requestId = spl_object_id($request);
+                    $this->shouldInject[$requestId] = true;
+                    $this->renderContext[$requestId] = [
+                        'type' => 'cart',
+                        'hasDpGravur' => $hasDpGravur,
+                    ];
+                }
+            }
+            return;
+        }
 
         if ($routeName !== 'frontend.detail.page') {
             return;
@@ -113,13 +145,61 @@ class ResponseSubscriber implements EventSubscriberInterface
             return;
         }
 
+        $ctx = $this->renderContext[$requestId];
+
+        // === Cart-Page-Inject (Theilich 2026-05-19): Lieferzeit-Hinweis + Cart-Clear-Button ===
+        if (($ctx['type'] ?? null) === 'cart') {
+            if (str_contains($content, 'dp-cart-header-injected')) {
+                return;
+            }
+            $hasDpGravur = $ctx['hasDpGravur'] ?? false;
+            $deliveryBox = '';
+            if ($hasDpGravur) {
+                $deliveryBox = '<div class="dp-cart-delivery-hint" style="background:#FEF8E8;border:1px solid #C9A45C;border-radius:6px;padding:14px 18px;margin:0 0 18px 0;display:flex;align-items:center;gap:12px;font-family:Inter,system-ui,sans-serif;">'
+                    . '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;color:#C9A45C;flex-shrink:0;"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>'
+                    . '<div><strong style="display:block;font-size:14px;color:#1d201f;margin-bottom:2px;">Lieferzeit voraussichtlich 2–3 Wochen ab Freigabe</strong>'
+                    . '<span style="font-size:12px;color:#6B6B6B;">Ihre Konfiguration enthält eine Veredelung. Nach Ihrer Freigabe der Referenz starten wir die Produktion.</span></div></div>';
+            }
+            $clearButton = '<div class="dp-cart-clear" style="text-align:right;margin:0 0 12px 0;">'
+                . '<form method="get" action="' . htmlspecialchars($request->getBasePath() . '/dosenzauber/clear-cart', ENT_QUOTES, 'UTF-8') . '" onsubmit="return confirm(\'Wirklich den gesamten Warenkorb leeren? Alle Positionen werden entfernt.\');" style="display:inline;">'
+                . '<button type="submit" style="background:none;border:1px solid #d4d4d4;color:#6B6B6B;font-size:11px;padding:6px 14px;border-radius:4px;cursor:pointer;font-family:Inter,system-ui,sans-serif;" onmouseover="this.style.borderColor=\'#c1272d\';this.style.color=\'#c1272d\';" onmouseout="this.style.borderColor=\'#d4d4d4\';this.style.color=\'#6B6B6B\';">'
+                . 'Warenkorb leeren</button></form></div>';
+            $headerHtml = '<div class="dp-cart-header-injected">' . $deliveryBox . $clearButton . '</div>';
+
+            // Prepend vor dem ersten Cart-LineItem-Container
+            // Versuche verschiedene Anker (verschiedene Themes/Versionen)
+            $anchors = [
+                '/<div\s+class="[^"]*\bcart-table-wrapper\b[^"]*"/i',
+                '/<div\s+class="[^"]*\bcheckout-aside-cart\b[^"]*"/i',
+                '/<div\s+class="[^"]*\bcart-product\b[^"]*"/i',
+                '/<form\s+[^>]*name="cart"/i',
+            ];
+            $injected = false;
+            foreach ($anchors as $pattern) {
+                if (preg_match($pattern, $content, $m, PREG_OFFSET_CAPTURE)) {
+                    $offset = $m[0][1];
+                    $content = substr($content, 0, $offset) . $headerHtml . substr($content, $offset);
+                    $injected = true;
+                    break;
+                }
+            }
+            if (!$injected) {
+                // Fallback: vor </main>
+                $content = preg_replace('/<\/main>/i', $headerHtml . '</main>', $content, 1);
+            }
+
+            $response->setContent($content);
+            unset($this->shouldInject[$requestId], $this->renderContext[$requestId]);
+            return;
+        }
+
+        // === Produktdetailseite: Konfigurator-Inject (bestehender Pfad) ===
         // Doppel-Injection vermeiden
         if (str_contains($content, 'dp-cfg-source')) {
             return;
         }
 
         try {
-            $ctx = $this->renderContext[$requestId];
             $configuratorHtml = $this->twig->render(
                 '@DoseplusDosenzauberConfigurator/storefront/component/dosenzauber-configurator.html.twig',
                 [

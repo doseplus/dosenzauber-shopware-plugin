@@ -362,6 +362,24 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                 <p x-show="blankoError" x-cloak class="text-[11px] text-red-600 mt-2 text-center" x-text="blankoError"></p>
             </div>
 
+            {# Theilich 2026-05-19: Versand-Hinweis nach VE (Kartons). Dynamisch je Sales-Channel.
+               Wird nicht angezeigt wenn cfg.shipping null ist (FR/PL gibt's eh nicht). #}
+            <div x-show="cfg.shipping" x-cloak class="bg-stone-100 border border-stone-200 rounded-lg p-3 text-xs">
+                <div class="flex items-start gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-4 h-4 text-stone-500 mt-0.5 shrink-0">{{ icSvg['truck']|raw }}</svg>
+                    <div class="flex-1">
+                        <p class="text-[11px] text-stone-700 leading-tight">
+                            <strong>Versand</strong> <span x-text="shippingTier()" class="font-semibold text-stone-900"></span>
+                            <span class="text-stone-500">·</span>
+                            <span x-text="`${Math.ceil(quantity / cfg.kartonSize)} ${Math.ceil(quantity / cfg.kartonSize) === 1 ? 'Karton' : 'Kartons'} (VE)`"></span>
+                        </p>
+                        <p class="text-[10px] text-stone-500 mt-0.5 leading-snug">
+                            Berechnung im Warenkorb · <a href="/informationen/versand-und-zahlung/" target="_blank" class="underline">alle Versand-Regeln</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             {# Stücklisten-Box #}
             <details class="bg-stone-50 border border-stone-200 rounded-lg text-xs">
                 <summary class="px-4 py-2.5 cursor-pointer font-semibold flex items-center justify-between hover:bg-stone-100">
@@ -374,7 +392,7 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                     {# Formel-Zeile: WKN bei neutraler Karte, WKI bei persönlichem Text (Theilich 2026-05-18 Punkte 4+5).
                        UV ohne K-Suffix — gleicher Bestand für plano + konfektioniert (Punkt 2). #}
                     <p class="num font-mono text-[11px] text-stone-500 pb-1">
-                        <span x-text="cfg.productNumber"></span>
+                        <span x-text="cfg.wd || cfg.productNumber"></span>
                         <span x-show="options[1].on && karteVariant !== 'persoenlich'"> + <span x-text="cfg.wkn"></span></span>
                         <span x-show="options[1].on && karteVariant === 'persoenlich'"> + <span x-text="cfg.wki"></span></span>
                         <span x-show="options[0].on"> + NK LG (<span x-text="cfg.gravurCode"></span>)</span>
@@ -384,9 +402,10 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                         <span x-show="options[2].on"> + <span x-text="cfg.uvNumber"></span></span>
                     </p>
                     <ul class="space-y-1 text-[11px]">
-                        {# WD-Zeile: aktueller Staffelpreis + Label statt nur Range (Theilich Punkt 7). #}
+                        {# WD-Zeile: aktueller Staffelpreis + Label statt nur Range (Theilich Punkt 7).
+                           cfg.wd zeigt "WD 010" (Lagerartikel), cfg.productNumber zeigt "DZ 010" (Cart-Anker). #}
                         <li>
-                            <span x-text="cfg.productNumber"></span> — {{ cfg.t.sl_weihnachtsdose }} ·
+                            <span x-text="cfg.wd || cfg.productNumber"></span> — {{ cfg.t.sl_weihnachtsdose }} ·
                             {{ cfg.t.sl_laser_aktuell }}
                             <span class="font-semibold" x-text="formatPrice(wdPrice())"></span>{{ cfg.t.sl_stueck }}
                             (<span x-text="staffelLabel()"></span>)
@@ -493,7 +512,7 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                 <div class="border-t border-white/10 pt-2.5 space-y-1 text-[11px] mb-3">
                     <p class="text-[9px] uppercase tracking-wider text-white/40 font-bold mb-1">{{ cfg.t.cart_breakdown }} · <span x-text="quantity"></span> × <span x-text="formatPrice(calcStueckpreis())"></span></p>
                     <div class="flex justify-between text-white/80">
-                        <span><span x-text="cfg.productNumber"></span> · {{ cfg.t.cart_base }}</span>
+                        <span><span x-text="cfg.wd || cfg.productNumber"></span> · {{ cfg.t.cart_base }}</span>
                         <span class="num font-semibold" x-text="`${formatPrice(wdPrice())} × ${quantity} = ${formatPrice(wdPrice() * quantity)}`"></span>
                     </div>
                     <div x-show="options[0].on" class="flex justify-between text-white/80">
@@ -653,6 +672,21 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
         laserPrice() { return this.cfg.laserStaffel[this.staffelIdx(this.quantity, 5)] || 0; },
         staffelLabel() {
             return ['bis 99 Stk.','ab 100 Stk.','ab 300 Stk.','ab 500 Stk.','ab 1.000 Stk.','ab 2.000 Stk.'][this.staffelIdx(this.quantity, 5)];
+        },
+
+        // Theilich 2026-05-19: Versand-Hinweis nach VE (Karton). Sucht Tier in cfg.shipping.tiers.
+        shippingTier() {
+            if (!this.cfg.shipping) return '';
+            const veCount = Math.ceil(this.quantity / this.cfg.kartonSize);
+            const cur = this.cfg.shipping.currency || 'EUR';
+            const fmt = (n) => new Intl.NumberFormat(this.cfg.locale || 'de-DE', { style: 'currency', currency: cur }).format(n);
+            for (const tier of this.cfg.shipping.tiers) {
+                if (tier.maxVe === null || veCount <= tier.maxVe) {
+                    if (tier.perVe) return `${fmt(tier.perVe)} / VE · ${tier.method}`;
+                    if (tier.flat)  return `${fmt(tier.flat)} pauschal · ${tier.method}`;
+                }
+            }
+            return '';
         },
 
         calcStueckpreis() {
