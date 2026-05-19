@@ -81,6 +81,61 @@ class DosenzauberController extends StorefrontController
         return new \Symfony\Component\HttpFoundation\RedirectResponse($referer);
     }
 
+    /**
+     * Theilich 2026-05-19: Blankomuster (Agentur-Service) — fügt eine Custom-LineItem
+     * "Blankomuster {DZ}" für 4€ pauschal in den Cart. Pickware kann den WD- und
+     * WKN-Bestand über dpStockHints im Payload nachher abbuchen.
+     */
+    #[Route(
+        path: '/dosenzauber/add-blankomuster',
+        name: 'frontend.dosenzauber.add-blankomuster',
+        methods: ['POST'],
+        defaults: ['XmlHttpRequest' => true, '_routeScope' => ['storefront']]
+    )]
+    public function addBlankomuster(Request $request, SalesChannelContext $context): JsonResponse
+    {
+        try {
+            $data = $this->decodePayload($request);
+            if ($data === null) {
+                return new JsonResponse(['ok' => false, 'error' => 'Invalid JSON payload'], 400);
+            }
+            $productNumber = trim((string)($data['productNumber'] ?? ''));
+            $wdSku  = trim((string)($data['wdSku'] ?? ''));
+            $wknSku = trim((string)($data['wknSku'] ?? ''));
+            if ($productNumber === '' || $wdSku === '') {
+                return new JsonResponse(['ok' => false, 'error' => 'productNumber + wdSku required'], 400);
+            }
+            $cart = $this->cartService->getCart($context->getToken(), $context);
+            // Custom LineItem 4€ pauschal — Standard-removable.
+            $id = Uuid::randomHex();
+            $li = new LineItem($id, LineItem::CUSTOM_LINE_ITEM_TYPE, null, 1);
+            $li->setLabel('Blankomuster ' . $productNumber);
+            $li->setRemovable(true);
+            $li->setStackable(false);
+            $price = new CalculatedPrice(
+                4.00, 4.00, new CalculatedTaxCollection(), new TaxRuleCollection()
+            );
+            $li->setPriceDefinition(new QuantityPriceDefinition(4.00, new TaxRuleCollection(), 1));
+            $li->setPrice($price);
+            $li->setPayloadValue('dpBlankomuster', [
+                'forProduct' => $productNumber,
+                'stockMovements' => [
+                    ['sku' => $wdSku,  'qty' => 1, 'role' => 'dose-blanko'],
+                    ['sku' => $wknSku, 'qty' => 1, 'role' => 'karte-neutral'],
+                ],
+            ]);
+            $cart = $this->cartService->add($cart, $li, $context);
+            return new JsonResponse([
+                'ok' => true,
+                'lineItemId' => $id,
+                'itemCount' => $cart->getLineItems()->count(),
+            ]);
+        } catch (\Throwable $e) {
+            $this->logger->error('Dosenzauber addBlankomuster failed', ['error' => $e->getMessage()]);
+            return new JsonResponse(['ok' => false, 'error' => 'Server-Fehler: ' . $e->getMessage()], 500);
+        }
+    }
+
     #[Route(
         path: '/dosenzauber/add-to-cart',
         name: 'frontend.dosenzauber.add-to-cart',
@@ -191,6 +246,32 @@ class DosenzauberController extends StorefrontController
             $optionItems = $this->buildOptionLineItems($sanitized, $product, $quantity, $configGroupId, $context);
             foreach ($optionItems as $oi) {
                 $allItems[] = $oi;
+            }
+
+            // Theilich 2026-05-19: Vorabveredelungsmuster — wenn im Konfigurator
+            // ausgewählt (Checkbox im Lasergravur-Block) + Logo vorhanden, fügen
+            // wir ein zusätzliches Cart-Item für 45€ pauschal hinzu.
+            // Gehört NICHT zur Konfiguration → standard-removable, kein dpGroupId.
+            $vorabmusterOn = !empty($data['laser']['vorabmuster']) && !empty($data['laser']['logoFileName']);
+            if ($vorabmusterOn) {
+                $vmId = Uuid::randomHex();
+                $vmLi = new LineItem($vmId, LineItem::CUSTOM_LINE_ITEM_TYPE, null, 1);
+                $vmLi->setLabel('Vorabveredelungsmuster ' . $product->getProductNumber() . ' (Probegravur)');
+                $vmLi->setRemovable(true);
+                $vmLi->setStackable(false);
+                $vmPrice = new CalculatedPrice(45.00, 45.00, new CalculatedTaxCollection(), new TaxRuleCollection());
+                $vmLi->setPriceDefinition(new QuantityPriceDefinition(45.00, new TaxRuleCollection(), 1));
+                $vmLi->setPrice($vmPrice);
+                $cfgData2 = $this->dataProvider->getDataForProduct($product, $context) ?? [];
+                $vmLi->setPayloadValue('dpVorabmuster', [
+                    'forProduct'     => $product->getProductNumber(),
+                    'logoFileName'   => $data['laser']['logoFileName'] ?? null,
+                    'stockMovements' => [
+                        ['sku' => $cfgData2['wd']  ?? '', 'qty' => 1, 'role' => 'dose-vorabmuster'],
+                        ['sku' => $cfgData2['wkn'] ?? '', 'qty' => 1, 'role' => 'karte-neutral'],
+                    ],
+                ]);
+                $allItems[] = $vmLi;
             }
 
             $cart = $this->cartService->add($cart, $allItems, $context);

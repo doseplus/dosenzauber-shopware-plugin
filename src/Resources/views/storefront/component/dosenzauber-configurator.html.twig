@@ -205,6 +205,22 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                                 </div>
                                 <span class="text-xs font-bold num shrink-0">+ <span x-text="formatPrice(cfg.fixedPrices.nkPersonalisierung)"></span></span>
                             </label>
+
+                            {# Theilich 2026-05-19: Vorabveredelungsmuster — Probegravur des Kundenlogos auf
+                               einer einzelnen Dose (unbefüllt, mit neutraler Karte). 45 € pauschal inkl.
+                               Versand. Eigenständiges Cart-Item, gehört NICHT zur Konfiguration.
+                               Nur aktivierbar wenn Logo hochgeladen ist. #}
+                            <label @click.stop class="mt-2 flex items-center gap-2.5 p-2.5 rounded-lg border-2 transition"
+                                   :class="!logoFile ? 'border-stone-200 bg-stone-50 opacity-50 cursor-not-allowed' : (laser.vorabmuster ? 'border-red-600 bg-white cursor-pointer' : 'border-stone-200 bg-stone-50 hover:border-red-600 cursor-pointer')"
+                                   :title="!logoFile ? 'Bitte erst Logo hochladen' : ''">
+                                <input type="checkbox" x-model="laser.vorabmuster" :disabled="!logoFile" class="checkbox-sw" @click.stop>
+                                <div class="flex-1">
+                                    <p class="text-xs font-semibold leading-tight">Vorabveredelungsmuster zur Ansicht</p>
+                                    <p class="text-[10px] text-stone-500 leading-tight">Probegravur Ihres Logos auf einer einzelnen Dose · inkl. Versand · separates Cart-Item</p>
+                                    <p x-show="!logoFile" class="text-[10px] text-amber-700 leading-tight mt-0.5">Erst Logo hochladen zum Aktivieren</p>
+                                </div>
+                                <span class="text-xs font-bold num shrink-0">+ <span x-text="formatPrice(cfg.fixedPrices.vorabmuster)"></span></span>
+                            </label>
                         </div>
 
                         {# BEFÜLLUNG-Detail: feste Anzahl + Karte mit/ohne Text #}
@@ -327,6 +343,23 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                         </div>
                     </template>
                 </div>
+
+                {# Theilich 2026-05-19: Blankomuster-Block — Agentur-Service.
+                   1× WD-Dose + 1× WKN-Karte, OHNE Gravur, pauschal 4€ (= Shopware "Musterpreis").
+                   Direkt im Cart-Add; gehört NICHT zur Konfiguration, ist separat löschbar. #}
+                <div class="mt-3 pt-3 border-t border-stone-200 flex items-center gap-3 flex-wrap">
+                    <div class="flex-1 min-w-[60%]">
+                        <p class="text-xs font-semibold text-stone-900">Sie wollen vorab die Qualität der Dose einschätzen?</p>
+                        <p class="text-[10px] text-stone-500 leading-snug mt-0.5">Blankomuster (Dose + Karte, ohne Gravur) — direkt in den Warenkorb · 4 € pauschal</p>
+                    </div>
+                    <button type="button" @click="addBlankomuster()" :disabled="blankoBusy || !cfg.stockAvailable"
+                            class="bg-stone-900 hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold px-4 py-2 rounded transition whitespace-nowrap">
+                        <span x-show="!blankoBusy">Blankomuster in den Warenkorb</span>
+                        <span x-show="blankoBusy" x-cloak>Wird hinzugefügt …</span>
+                    </button>
+                </div>
+                <p x-show="blankoSuccess" x-cloak class="text-[11px] text-green-700 mt-2 text-center" x-text="blankoSuccess"></p>
+                <p x-show="blankoError" x-cloak class="text-[11px] text-red-600 mt-2 text-center" x-text="blankoError"></p>
             </div>
 
             {# Stücklisten-Box #}
@@ -346,6 +379,7 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                         <span x-show="options[1].on && karteVariant === 'persoenlich'"> + <span x-text="cfg.wki"></span></span>
                         <span x-show="options[0].on"> + NK LG (<span x-text="cfg.gravurCode"></span>)</span>
                         <span x-show="options[0].on && laser.personalisierung"> + NK PERS</span>
+                        <span x-show="options[0].on && laser.vorabmuster && logoFile"> + Vorabmuster</span>
                         <span x-show="options[1].on"> + <span x-text="cfg.maxRiegel"></span>× RSW</span>
                         <span x-show="options[2].on"> + <span x-text="cfg.uvNumber"></span></span>
                     </p>
@@ -360,6 +394,7 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                         <li x-show="options[0].on">NK LG (<span x-text="cfg.gravurCode"></span>) — {{ cfg.t.sl_laser_aktuell }} <span class="font-semibold" x-text="formatPrice(laserPrice())"></span>{{ cfg.t.sl_stueck }} (<span x-text="staffelLabel()"></span>)</li>
                         <li x-show="options[0].on">{{ cfg.t.laser_machine_setup }} — <span x-text="formatPrice(cfg.fixedPrices.nkLgMaschine)"></span> {{ cfg.t.sl_einmalig }}</li>
                         <li x-show="options[0].on && laser.personalisierung">NK PERS — {{ cfg.t.laser_personalization }} <span x-text="formatPrice(cfg.fixedPrices.nkPersonalisierung)"></span> {{ cfg.t.sl_pauschal }}</li>
+                        <li x-show="options[0].on && laser.vorabmuster && logoFile">Vorabveredelungsmuster — Probegravur · <span class="font-semibold" x-text="formatPrice(cfg.fixedPrices.vorabmuster)"></span> {{ cfg.t.sl_pauschal }} inkl. Versand</li>
                         <li x-show="options[1].on">RSW — {{ cfg.t.sl_ritter_voll }} · <span x-text="formatPrice(cfg.fixedPrices.rsw)"></span>{{ cfg.t.sl_stueck }}</li>
 
                         {# WKN: neutrale Karte, bucht vom Bestand ab (Theilich Punkt 4). #}
@@ -490,6 +525,10 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                         <span>NK PERS · {{ cfg.t.laser_personalization }}</span>
                         <span class="num font-semibold" x-text="`+ ${formatPrice(cfg.fixedPrices.nkPersonalisierung)}`"></span>
                     </div>
+                    <div x-show="options[0].on && laser.vorabmuster && logoFile" class="flex justify-between text-white/80">
+                        <span>Vorabveredelungsmuster · inkl. Versand</span>
+                        <span class="num font-semibold" x-text="`+ ${formatPrice(cfg.fixedPrices.vorabmuster)}`"></span>
+                    </div>
                     <div x-show="options[1].on && karteVariant === 'persoenlich'" class="flex justify-between text-white/80">
                         <span>{{ cfg.t.card_custom }}</span>
                         <span class="num font-semibold" x-text="`+ ${formatPrice(cfg.fixedPrices.karteText)}`"></span>
@@ -540,7 +579,10 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
         verpackungVariant: 'konfektioniert',
         karteVariant: 'standard',
         karteText: '',
-        laser: { personalisierung: false },
+        laser: { personalisierung: false, vorabmuster: false },
+        blankoBusy: false,
+        blankoSuccess: '',
+        blankoError: '',
 
         options: [
             { key:'laser',      on:true,  title:cfg.t.laser_title,       subtitle:cfg.t.laser_subtitle,        price:0,
@@ -627,6 +669,7 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
             let e = 0;
             if (this.options[0].on) e += this.cfg.fixedPrices.nkLgMaschine;
             if (this.options[0].on && this.laser.personalisierung) e += this.cfg.fixedPrices.nkPersonalisierung;
+            if (this.options[0].on && this.laser.vorabmuster && this.logoFile) e += this.cfg.fixedPrices.vorabmuster;
             if (this.options[1].on && this.karteVariant === 'persoenlich') e += this.cfg.fixedPrices.karteText;
             return e;
         },
@@ -748,6 +791,7 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
                 },
                 laser: {
                     personalisierung: this.laser.personalisierung,
+                    vorabmuster: !!(this.laser.vorabmuster && this.logoFile), // nur wenn Logo da
                     logoFileName: this.logoFile ? this.logoFile.name : null,
                 },
                 fuellung: {
@@ -815,6 +859,44 @@ window.dpDosenzauberCfg = function(cfg, productImageFilled) {
                 console.error('[Dosenzauber] addToCart failed:', e);
                 this.cartError = 'Hinzufügen fehlgeschlagen: ' + (e.message || 'Unbekannter Fehler') + '. Bitte später erneut versuchen oder telefonisch bestellen.';
                 this.busy = false;
+            }
+        },
+
+        // Theilich 2026-05-19: Blankomuster (Agentur-Service) — 1× WD + 1× WKN, OHNE Gravur, 4€ pauschal.
+        async addBlankomuster() {
+            if (this.blankoBusy) return;
+            this.blankoBusy = true;
+            this.blankoError = '';
+            this.blankoSuccess = '';
+            try {
+                const basePath = (window.dpDosenzauberBasePath || '');
+                const res = await fetch(basePath + '/dosenzauber/add-blankomuster', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        productId: this.cfg.productId,
+                        productNumber: this.cfg.productNumber,
+                        wdSku: this.cfg.wd,
+                        wknSku: this.cfg.wkn,
+                    }),
+                });
+                if (!res.ok) {
+                    const errBody = await res.json().catch(() => ({}));
+                    throw new Error(errBody.error || ('HTTP ' + res.status));
+                }
+                this.blankoSuccess = 'Blankomuster wurde zum Warenkorb hinzugefügt';
+                this.openOffcanvasCart();
+                setTimeout(() => { this.blankoSuccess = ''; }, 6000);
+            } catch (e) {
+                console.error('[Dosenzauber] addBlankomuster failed:', e);
+                this.blankoError = 'Konnte nicht hinzugefügt werden: ' + (e.message || 'Fehler');
+            } finally {
+                this.blankoBusy = false;
             }
         },
 
