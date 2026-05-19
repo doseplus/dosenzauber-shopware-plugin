@@ -115,12 +115,32 @@ class DosenzauberController extends StorefrontController
                 }
             }
             $cart = $this->cartService->getCart($context->getToken(), $context);
-            // Custom LineItem 4€ pauschal — Standard-removable.
+
+            // Theilich 2026-05-19: Pro Cart maximal 1 Blankomuster pro DZ-Variante.
+            // Sonst könnte jemand 100× 4€-Muster bestellen.
+            foreach ($cart->getLineItems() as $existing) {
+                $existingPayload = $existing->getPayload();
+                if (isset($existingPayload['dpBlankomuster']['forProduct'])
+                    && $existingPayload['dpBlankomuster']['forProduct'] === $productNumber) {
+                    return new JsonResponse([
+                        'ok'    => false,
+                        'error' => 'Sie haben für diese Dose bereits ein Blankomuster im Warenkorb.',
+                    ], 409);
+                }
+            }
+
+            // Custom LineItem 4€ pauschal — Standard-removable, NICHT stackable, qty=1 hard-cap.
             $id = Uuid::randomHex();
             $li = new LineItem($id, LineItem::CUSTOM_LINE_ITEM_TYPE, null, 1);
             $li->setLabel('Blankomuster ' . $productNumber);
             $li->setRemovable(true);
             $li->setStackable(false);
+            $li->setQuantityInformation(
+                (new \Shopware\Core\Checkout\Cart\LineItem\QuantityInformation())
+                    ->setMinPurchase(1)
+                    ->setMaxPurchase(1)
+                    ->setPurchaseSteps(1)
+            );
             $price = new CalculatedPrice(
                 4.00, 4.00, new CalculatedTaxCollection(), new TaxRuleCollection()
             );
@@ -264,25 +284,42 @@ class DosenzauberController extends StorefrontController
             // Gehört NICHT zur Konfiguration → standard-removable, kein dpGroupId.
             $vorabmusterOn = !empty($data['laser']['vorabmuster']) && !empty($data['laser']['logoFileName']);
             if ($vorabmusterOn) {
-                $vmId = Uuid::randomHex();
-                $vmLi = new LineItem($vmId, LineItem::CUSTOM_LINE_ITEM_TYPE, null, 1);
-                $vmLi->setLabel('Vorabveredelungsmuster ' . $product->getProductNumber() . ' (Probegravur)');
-                $vmLi->setRemovable(true);
-                $vmLi->setStackable(false);
-                $vmPrice = new CalculatedPrice(45.00, 45.00, new CalculatedTaxCollection(), new TaxRuleCollection());
-                $vmLi->setPriceDefinition(new QuantityPriceDefinition(45.00, new TaxRuleCollection(), 1));
-                $vmLi->setPrice($vmPrice);
-                $cfgData2 = $this->dataProvider->getDataForProduct($product, $context) ?? [];
-                $vmLi->setPayloadValue('dpVorabmuster', [
-                    'forProduct'     => $product->getProductNumber(),
-                    'coverUrl'       => $product->getCover()?->getMedia()?->getUrl(),
-                    'logoFileName'   => $data['laser']['logoFileName'] ?? null,
-                    'stockMovements' => [
-                        ['sku' => $cfgData2['wd']  ?? '', 'qty' => 1, 'role' => 'dose-vorabmuster'],
-                        ['sku' => $cfgData2['wkn'] ?? '', 'qty' => 1, 'role' => 'karte-neutral'],
-                    ],
-                ]);
-                $allItems[] = $vmLi;
+                // Theilich 2026-05-19: Pro Cart max 1 Vorabmuster pro DZ-Variante.
+                $alreadyHas = false;
+                foreach ($cart->getLineItems() as $existing) {
+                    $ep = $existing->getPayload();
+                    if (isset($ep['dpVorabmuster']['forProduct'])
+                        && $ep['dpVorabmuster']['forProduct'] === $product->getProductNumber()) {
+                        $alreadyHas = true; break;
+                    }
+                }
+                if (!$alreadyHas) {
+                    $vmId = Uuid::randomHex();
+                    $vmLi = new LineItem($vmId, LineItem::CUSTOM_LINE_ITEM_TYPE, null, 1);
+                    $vmLi->setLabel('Vorabveredelungsmuster ' . $product->getProductNumber() . ' (Probegravur)');
+                    $vmLi->setRemovable(true);
+                    $vmLi->setStackable(false);
+                    $vmLi->setQuantityInformation(
+                        (new \Shopware\Core\Checkout\Cart\LineItem\QuantityInformation())
+                            ->setMinPurchase(1)
+                            ->setMaxPurchase(1)
+                            ->setPurchaseSteps(1)
+                    );
+                    $vmPrice = new CalculatedPrice(45.00, 45.00, new CalculatedTaxCollection(), new TaxRuleCollection());
+                    $vmLi->setPriceDefinition(new QuantityPriceDefinition(45.00, new TaxRuleCollection(), 1));
+                    $vmLi->setPrice($vmPrice);
+                    $cfgData2 = $this->dataProvider->getDataForProduct($product, $context) ?? [];
+                    $vmLi->setPayloadValue('dpVorabmuster', [
+                        'forProduct'     => $product->getProductNumber(),
+                        'coverUrl'       => $product->getCover()?->getMedia()?->getUrl(),
+                        'logoFileName'   => $data['laser']['logoFileName'] ?? null,
+                        'stockMovements' => [
+                            ['sku' => $cfgData2['wd']  ?? '', 'qty' => 1, 'role' => 'dose-vorabmuster'],
+                            ['sku' => $cfgData2['wkn'] ?? '', 'qty' => 1, 'role' => 'karte-neutral'],
+                        ],
+                    ]);
+                    $allItems[] = $vmLi;
+                }
             }
 
             $cart = $this->cartService->add($cart, $allItems, $context);
