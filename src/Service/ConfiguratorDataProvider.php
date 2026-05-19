@@ -91,11 +91,41 @@ class ConfiguratorDataProvider
     /** @var array<string,string> cache languageId → locale code */
     private array $localeCache = [];
 
+    /** @var array<string,int> cache WD-SKU → available_stock (in-memory per Request) */
+    private array $wdStockCache = [];
+
     public function __construct(
         private readonly LoggerInterface $logger,
         private readonly ConfiguratorTranslations $translations,
         private readonly Connection $connection,
     ) {}
+
+    /**
+     * Theilich 2026-05-19: WD-Produkte sind die Lager-Artikel — bei DZ-Bestellung
+     * wird der WD-Bestand abgebucht. Stock-Check muss daher den WD-Bestand prüfen,
+     * NICHT den DZ-Bestand (der ist auf Live oft 0 obwohl WD voll ist).
+     *
+     * Returns available_stock des WD-Produkts oder 0 wenn nicht gefunden.
+     */
+    private function getWdStock(string $wdSku): int
+    {
+        if (isset($this->wdStockCache[$wdSku])) {
+            return $this->wdStockCache[$wdSku];
+        }
+        try {
+            // Höchster Bestand für die SKU — robust gegen mehrere version_ids
+            // (Live-Shop hat z.T. nicht die Shopware-Standard-Version-ID).
+            $stock = $this->connection->fetchOne(
+                'SELECT MAX(available_stock) FROM product WHERE product_number = :sku',
+                ['sku' => $wdSku]
+            );
+            $this->wdStockCache[$wdSku] = is_numeric($stock) ? (int) $stock : 0;
+        } catch (\Throwable $e) {
+            $this->logger->warning('WD-Stock-Lookup fehlgeschlagen', ['sku' => $wdSku, 'error' => $e->getMessage()]);
+            $this->wdStockCache[$wdSku] = 0;
+        }
+        return $this->wdStockCache[$wdSku];
+    }
 
     public function isDosenzauberProduct(SalesChannelProductEntity $product): bool
     {
@@ -120,6 +150,12 @@ class ConfiguratorDataProvider
         // nicht aus dem Live-Custom-Field attr14 (das auf einigen Produkten falsch gepflegt ist).
         $data = self::STATIC_DATA[$dzNumber];
 
+        // Theilich 2026-05-19: WD-Nummer ist der echte Lagerartikel (DZ ist nur
+        // der Cart-Anker/Konfig-Wrapper). 'wd' wird auf "WD xxx" gesetzt damit
+        // die Stückliste das korrekt anzeigt und der Cart-Movement WD-Bestand
+        // abbucht.
+        $data['wd'] = 'WD ' . substr($dzNumber, 3); // "DZ 010" → "WD 010"
+
         $locale       = 'de-DE';
         $currencyCode = 'EUR';
         $currencyFactor = 1.0;
@@ -132,11 +168,11 @@ class ConfiguratorDataProvider
             }
         }
 
-        // Theilich 2026-05-18 Bug 1: Stock-Check für DZ-Hauptartikel.
-        // Wenn der DZ-Artikel ausverkauft ist, soll der Konfigurator das anzeigen
-        // und den Cart-Add-Button sperren — sonst landen Konfigurationen ohne
-        // Dose im Warenkorb die sich nicht mehr löschen lassen.
-        $availableStock = (int) ($product->getAvailableStock() ?? 0);
+        // Theilich 2026-05-19: Stock-Check liest jetzt den WD-Bestand
+        // (Lager-Artikel), NICHT den DZ-Bestand. DZ-Produkte haben Live oft
+        // available_stock=0 obwohl WD-Lager voll ist — würde sonst 5 von 8
+        // DZ-Seiten fälschlich als ausverkauft markieren.
+        $availableStock = $this->getWdStock($data['wd']);
         $stockAvailable = $availableStock > 0;
 
         return [

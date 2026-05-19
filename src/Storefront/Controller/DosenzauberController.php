@@ -43,6 +43,44 @@ class DosenzauberController extends StorefrontController
         private readonly LoggerInterface $logger,
     ) {}
 
+    /**
+     * Theilich 2026-05-19: "Warenkorb leeren"-Button — entfernt ALLE Line-Items
+     * inkl. der an-Konfiguration-gebundenen NK_*-Helfer (die normalerweise
+     * setRemovable(false) sind).
+     */
+    #[Route(
+        path: '/dosenzauber/clear-cart',
+        name: 'frontend.dosenzauber.clear-cart',
+        methods: ['GET'],
+        defaults: ['_routeScope' => ['storefront']]
+    )]
+    public function clearCart(Request $request, SalesChannelContext $context): \Symfony\Component\HttpFoundation\RedirectResponse
+    {
+        try {
+            $cart = $this->cartService->getCart($context->getToken(), $context);
+            $ids = [];
+            foreach ($cart->getLineItems() as $li) {
+                $ids[] = $li->getId();
+            }
+            if (!empty($ids)) {
+                // Alle Items als removable markieren, dann entfernen — sonst
+                // wirft Shopware "is not removable" für die NK_*-Helfer.
+                foreach ($cart->getLineItems() as $li) {
+                    $li->setRemovable(true);
+                }
+                foreach ($ids as $id) {
+                    $cart->remove($id);
+                }
+                $this->cartService->recalculate($cart, $context);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('Dosenzauber clearCart fehlgeschlagen', ['error' => $e->getMessage()]);
+        }
+        // Zurück zur vorigen Seite
+        $referer = $request->headers->get('referer') ?: $this->generateUrl('frontend.home.page');
+        return new \Symfony\Component\HttpFoundation\RedirectResponse($referer);
+    }
+
     #[Route(
         path: '/dosenzauber/add-to-cart',
         name: 'frontend.dosenzauber.add-to-cart',
@@ -85,15 +123,29 @@ class DosenzauberController extends StorefrontController
                 return new JsonResponse(['ok' => false, 'error' => 'Produkt ist kein Dosenzauber-Produkt'], 400);
             }
 
-            // Theilich 2026-05-18 Bug 1: Stock-Defense im Backend — falls Frontend-Check
-            // umgangen wird, schicken wir hier einen klaren 409-Fehler statt eine
-            // Konfiguration ohne Dose im Cart anzulegen.
-            $availableStock = (int) ($product->getAvailableStock() ?? 0);
-            if ($availableStock <= 0) {
-                return new JsonResponse([
-                    'ok'    => false,
-                    'error' => 'Diese Dose ist aktuell ausverkauft.',
-                ], 409);
+            // Theilich 2026-05-19 Bug 1: Stock-Defense — prüft den WD-Bestand
+            // (Lager-Artikel), NICHT den DZ-Bestand. cfg.wd kommt aus dem
+            // ConfiguratorDataProvider und ist "WD xxx".
+            $cfgData = $this->dataProvider->getDataForProduct($product, $context);
+            $wdSku = $cfgData['wd'] ?? null;
+            if ($wdSku) {
+                try {
+                    $wdStockRow = $this->container->get('Doctrine\\DBAL\\Connection')->fetchOne(
+                        'SELECT MAX(available_stock) FROM product WHERE product_number = :sku',
+                        ['sku' => $wdSku]
+                    );
+                    $wdStock = is_numeric($wdStockRow) ? (int) $wdStockRow : 0;
+                    if ($wdStock <= 0) {
+                        return new JsonResponse([
+                            'ok'    => false,
+                            'error' => 'Diese Dose ist aktuell ausverkauft.',
+                        ], 409);
+                    }
+                } catch (\Throwable $e) {
+                    $this->logger->warning('WD-Stock-Check fehlgeschlagen, lass Cart-Add durch', [
+                        'wdSku' => $wdSku, 'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             $cart = $this->cartService->getCart($context->getToken(), $context);

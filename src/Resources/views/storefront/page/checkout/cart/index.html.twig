@@ -1,0 +1,48 @@
+{% sw_extends '@Storefront/storefront/page/checkout/cart/index.html.twig' %}
+
+{#
+   Theilich 2026-05-19:
+   - Lieferzeit-Hinweis oben im Cart-Header:
+     · Wenn IRGENDEIN DZ-LineItem Lasergravur aktiv hat → "2-3 Wochen ab Freigabe"
+     · Sonst → kein Override (Shopware-Default greift)
+   - "Warenkorb leeren"-Button im Cart-Header
+#}
+
+{% block page_checkout_cart_header %}
+    {{ parent() }}
+
+    {# Check ob im Cart ein DZ-Konfig mit Lasergravur ist #}
+    {% set hasDpGravur = false %}
+    {% set hasDpItem = false %}
+    {% for li in page.cart.lineItems %}
+        {% if li.payload.dpDosenzauberConfig is defined %}
+            {% set hasDpItem = true %}
+            {% if li.payload.dpDosenzauberConfig.options.laser %}
+                {% set hasDpGravur = true %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+
+    {% if hasDpGravur %}
+        <div class="dp-cart-delivery-hint alert" style="background:#FEF8E8;border:1px solid #C9A45C;border-radius:6px;padding:14px 18px;margin:0 0 18px 0;display:flex;align-items:center;gap:12px;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;color:#C9A45C;flex-shrink:0;">
+                <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
+            </svg>
+            <div>
+                <strong style="display:block;font-size:14px;color:#1d201f;margin-bottom:2px;">Lieferzeit voraussichtlich 2–3 Wochen ab Freigabe</strong>
+                <span style="font-size:12px;color:#6B6B6B;">Ihre Konfiguration enthält eine Veredelung. Nach Ihrer Freigabe der Referenz starten wir die Produktion.</span>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if hasDpItem or page.cart.lineItems|length > 0 %}
+        <div class="dp-cart-clear" style="text-align:right;margin:0 0 12px 0;">
+            <button type="button" onclick="if(confirm('Wirklich den gesamten Warenkorb leeren? Alle Positionen werden entfernt.')){window.location.href='{{ path('frontend.dosenzauber.clear-cart') }}';}"
+                    style="background:none;border:1px solid #d4d4d4;color:#6B6B6B;font-size:11px;padding:6px 14px;border-radius:4px;cursor:pointer;"
+                    onmouseover="this.style.borderColor='#c1272d';this.style.color='#c1272d';"
+                    onmouseout="this.style.borderColor='#d4d4d4';this.style.color='#6B6B6B';">
+                Warenkorb leeren
+            </button>
+        </div>
+    {% endif %}
+{% endblock %}

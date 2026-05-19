@@ -1,0 +1,34 @@
+{% sw_extends '@Storefront/storefront/component/checkout/offcanvas-cart.html.twig' %}
+
+{#
+   Theilich 2026-05-19: Lieferzeit-Hinweis + Warenkorb-leeren im Offcanvas
+   (B2B-Plugin blockt /checkout/cart-Seite, Offcanvas ist der primäre Cart-View).
+#}
+
+{% block component_offcanvas_cart_content %}
+    {# Check ob im Cart ein DZ-Konfig mit Lasergravur ist #}
+    {% set hasDpGravur = false %}
+    {% for li in page.cart.lineItems %}
+        {% if li.payload.dpDosenzauberConfig is defined and li.payload.dpDosenzauberConfig.options.laser %}
+            {% set hasDpGravur = true %}
+        {% endif %}
+    {% endfor %}
+
+    {% if hasDpGravur %}
+        <div style="background:#FEF8E8;border:1px solid #C9A45C;border-radius:6px;padding:10px 14px;margin:0 0 14px 0;font-size:12px;color:#1d201f;">
+            <strong>Lieferzeit voraussichtlich 2–3 Wochen ab Freigabe</strong><br>
+            <span style="color:#6B6B6B;">Nach Ihrer Referenz-Freigabe starten wir die Produktion.</span>
+        </div>
+    {% endif %}
+
+    {{ parent() }}
+
+    {% if page.cart.lineItems|length > 0 %}
+        <div style="text-align:center;margin:10px 0 0 0;padding:8px 0;border-top:1px solid #e5e5e5;">
+            <button type="button" onclick="if(confirm('Wirklich den gesamten Warenkorb leeren?')){window.location.href='{{ path('frontend.dosenzauber.clear-cart') }}';}"
+                    style="background:none;border:none;color:#6B6B6B;font-size:11px;cursor:pointer;text-decoration:underline;">
+                Warenkorb leeren
+            </button>
+        </div>
+    {% endif %}
+{% endblock %}

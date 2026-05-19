@@ -416,6 +416,10 @@ window.dpDosenzauberProductImage = {{ productImageFilled|json_encode|raw }};
                         <input type="text" x-model="promoInput" @keyup.enter="applyPromo()" placeholder="Code eingeben" class="flex-1 bg-stone-700 text-white text-xs uppercase tracking-wider rounded px-2.5 py-2 placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400 font-bold">
                         <button @click="applyPromo()" class="bg-amber-500 hover:bg-amber-600 text-stone-900 text-xs font-bold px-3 py-2 rounded transition">{{ cfg.t.promo_redeem }}</button>
                     </div>
+                    {# Theilich 2026-05-19: Sternchen-Hinweis "Nur 1 Rabatt pro Kauf" — direkt unter dem Eingabefeld #}
+                    <p class="text-[10px] text-white/50 mt-2 leading-snug">
+                        * Nur ein Rabatt pro Bestellung. Bei mehreren Codes gilt automatisch der mit der höchsten Ersparnis.
+                    </p>
                     <p x-show="promoError" x-cloak class="text-[10px] text-red-300 mt-1.5 flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide w-3 h-3">{{ icSvg['alert-circle']|raw }}</svg> <span x-text="promoError"></span></p>
                 </div>
 
