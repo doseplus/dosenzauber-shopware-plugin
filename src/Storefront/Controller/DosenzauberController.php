@@ -116,29 +116,35 @@ class DosenzauberController extends StorefrontController
             }
             $cart = $this->cartService->getCart($context->getToken(), $context);
 
-            // Theilich 2026-05-19: Pro Cart maximal 1 Blankomuster pro DZ-Variante.
-            // Sonst könnte jemand 100× 4€-Muster bestellen.
+            // Theilich 2026-05-20: Blankomuster-Quantity ist FREI wählbar — Kunde
+            // darf so viele bestellen wie er möchte. Falls schon vorhanden:
+            // Quantity einfach +1 erhöhen statt neuer LineItem.
             foreach ($cart->getLineItems() as $existing) {
                 $existingPayload = $existing->getPayload();
                 if (isset($existingPayload['dpBlankomuster']['forProduct'])
                     && $existingPayload['dpBlankomuster']['forProduct'] === $productNumber) {
+                    $existing->setQuantity($existing->getQuantity() + 1);
+                    $this->cartService->recalculate($cart, $context);
                     return new JsonResponse([
-                        'ok'    => false,
-                        'error' => 'Sie haben für diese Dose bereits ein Blankomuster im Warenkorb.',
-                    ], 409);
+                        'ok'         => true,
+                        'lineItemId' => $existing->getId(),
+                        'quantity'   => $existing->getQuantity(),
+                        'itemCount'  => $cart->getLineItems()->count(),
+                        'message'    => 'Blankomuster-Menge erhöht',
+                    ]);
                 }
             }
 
-            // Custom LineItem 4€ pauschal — Standard-removable, NICHT stackable, qty=1 hard-cap.
+            // Custom LineItem 4€ pauschal — Standard-removable, stackable, frei wählbare Menge.
             $id = Uuid::randomHex();
             $li = new LineItem($id, LineItem::CUSTOM_LINE_ITEM_TYPE, null, 1);
             $li->setLabel('Blankomuster ' . $productNumber);
             $li->setRemovable(true);
-            $li->setStackable(false);
+            $li->setStackable(true);
             $li->setQuantityInformation(
                 (new \Shopware\Core\Checkout\Cart\LineItem\QuantityInformation())
                     ->setMinPurchase(1)
-                    ->setMaxPurchase(1)
+                    ->setMaxPurchase(999)
                     ->setPurchaseSteps(1)
             );
             $price = new CalculatedPrice(
@@ -162,6 +168,94 @@ class DosenzauberController extends StorefrontController
             ]);
         } catch (\Throwable $e) {
             $this->logger->error('Dosenzauber addBlankomuster failed', ['error' => $e->getMessage()]);
+            return new JsonResponse(['ok' => false, 'error' => 'Server-Fehler: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Theilich 2026-05-20: Vorabveredelungsmuster — eigenständiges Produkt mit
+     * Probegravur. 45€ pauschal. Quantity bleibt auf 1 (Theilich: "nicht das
+     * man extrem viele davon bekommt"). Stock-Movement: 1× WD + 1× WKN.
+     * Logo-Upload erfolgt separat via /dosenzauber/upload-logo.
+     */
+    #[Route(
+        path: '/dosenzauber/add-vorabmuster',
+        name: 'frontend.dosenzauber.add-vorabmuster',
+        methods: ['POST'],
+        defaults: ['XmlHttpRequest' => true, '_routeScope' => ['storefront']]
+    )]
+    public function addVorabmuster(Request $request, SalesChannelContext $context): JsonResponse
+    {
+        try {
+            $data = $this->decodePayload($request);
+            if ($data === null) {
+                return new JsonResponse(['ok' => false, 'error' => 'Invalid JSON payload'], 400);
+            }
+            $productNumber = trim((string)($data['productNumber'] ?? ''));
+            $wdSku  = trim((string)($data['wdSku'] ?? ''));
+            $wknSku = trim((string)($data['wknSku'] ?? ''));
+            $productId = trim((string)($data['productId'] ?? ''));
+            $logoFileName = trim((string)($data['logoFileName'] ?? ''));
+            if ($productNumber === '' || $wdSku === '') {
+                return new JsonResponse(['ok' => false, 'error' => 'productNumber + wdSku required'], 400);
+            }
+            if ($logoFileName === '') {
+                return new JsonResponse(['ok' => false, 'error' => 'Vorabmuster erfordert ein Logo. Bitte erst Logo im Lasergravur-Block hochladen.'], 400);
+            }
+            // Cover-URL vom DZ-Produkt
+            $coverUrl = null;
+            if ($productId !== '') {
+                $dzProduct = $this->loadProductById($productId, $context);
+                if ($dzProduct) {
+                    $coverUrl = $dzProduct->getCover()?->getMedia()?->getUrl();
+                }
+            }
+            $cart = $this->cartService->getCart($context->getToken(), $context);
+
+            // Theilich: max 1 Vorabmuster pro DZ-Variante (Theilich: "nicht
+            // das man extrem viele davon bekommt").
+            foreach ($cart->getLineItems() as $existing) {
+                $ep = $existing->getPayload();
+                if (isset($ep['dpVorabmuster']['forProduct'])
+                    && $ep['dpVorabmuster']['forProduct'] === $productNumber) {
+                    return new JsonResponse([
+                        'ok'    => false,
+                        'error' => 'Sie haben für diese Dose bereits ein Vorabmuster im Warenkorb.',
+                    ], 409);
+                }
+            }
+
+            $id = Uuid::randomHex();
+            $li = new LineItem($id, LineItem::CUSTOM_LINE_ITEM_TYPE, null, 1);
+            $li->setLabel('Vorabveredelungsmuster ' . $productNumber . ' (Probegravur)');
+            $li->setRemovable(true);
+            $li->setStackable(false);
+            $li->setQuantityInformation(
+                (new \Shopware\Core\Checkout\Cart\LineItem\QuantityInformation())
+                    ->setMinPurchase(1)
+                    ->setMaxPurchase(1)
+                    ->setPurchaseSteps(1)
+            );
+            $price = new CalculatedPrice(45.00, 45.00, new CalculatedTaxCollection(), new TaxRuleCollection());
+            $li->setPriceDefinition(new QuantityPriceDefinition(45.00, new TaxRuleCollection(), 1));
+            $li->setPrice($price);
+            $li->setPayloadValue('dpVorabmuster', [
+                'forProduct'     => $productNumber,
+                'coverUrl'       => $coverUrl,
+                'logoFileName'   => $logoFileName,
+                'stockMovements' => [
+                    ['sku' => $wdSku,  'qty' => 1, 'role' => 'dose-vorabmuster'],
+                    ['sku' => $wknSku, 'qty' => 1, 'role' => 'karte-neutral'],
+                ],
+            ]);
+            $cart = $this->cartService->add($cart, $li, $context);
+            return new JsonResponse([
+                'ok'         => true,
+                'lineItemId' => $id,
+                'itemCount'  => $cart->getLineItems()->count(),
+            ]);
+        } catch (\Throwable $e) {
+            $this->logger->error('Dosenzauber addVorabmuster failed', ['error' => $e->getMessage()]);
             return new JsonResponse(['ok' => false, 'error' => 'Server-Fehler: ' . $e->getMessage()], 500);
         }
     }
@@ -278,49 +372,9 @@ class DosenzauberController extends StorefrontController
                 $allItems[] = $oi;
             }
 
-            // Theilich 2026-05-19: Vorabveredelungsmuster — wenn im Konfigurator
-            // ausgewählt (Checkbox im Lasergravur-Block) + Logo vorhanden, fügen
-            // wir ein zusätzliches Cart-Item für 45€ pauschal hinzu.
-            // Gehört NICHT zur Konfiguration → standard-removable, kein dpGroupId.
-            $vorabmusterOn = !empty($data['laser']['vorabmuster']) && !empty($data['laser']['logoFileName']);
-            if ($vorabmusterOn) {
-                // Theilich 2026-05-19: Pro Cart max 1 Vorabmuster pro DZ-Variante.
-                $alreadyHas = false;
-                foreach ($cart->getLineItems() as $existing) {
-                    $ep = $existing->getPayload();
-                    if (isset($ep['dpVorabmuster']['forProduct'])
-                        && $ep['dpVorabmuster']['forProduct'] === $product->getProductNumber()) {
-                        $alreadyHas = true; break;
-                    }
-                }
-                if (!$alreadyHas) {
-                    $vmId = Uuid::randomHex();
-                    $vmLi = new LineItem($vmId, LineItem::CUSTOM_LINE_ITEM_TYPE, null, 1);
-                    $vmLi->setLabel('Vorabveredelungsmuster ' . $product->getProductNumber() . ' (Probegravur)');
-                    $vmLi->setRemovable(true);
-                    $vmLi->setStackable(false);
-                    $vmLi->setQuantityInformation(
-                        (new \Shopware\Core\Checkout\Cart\LineItem\QuantityInformation())
-                            ->setMinPurchase(1)
-                            ->setMaxPurchase(1)
-                            ->setPurchaseSteps(1)
-                    );
-                    $vmPrice = new CalculatedPrice(45.00, 45.00, new CalculatedTaxCollection(), new TaxRuleCollection());
-                    $vmLi->setPriceDefinition(new QuantityPriceDefinition(45.00, new TaxRuleCollection(), 1));
-                    $vmLi->setPrice($vmPrice);
-                    $cfgData2 = $this->dataProvider->getDataForProduct($product, $context) ?? [];
-                    $vmLi->setPayloadValue('dpVorabmuster', [
-                        'forProduct'     => $product->getProductNumber(),
-                        'coverUrl'       => $product->getCover()?->getMedia()?->getUrl(),
-                        'logoFileName'   => $data['laser']['logoFileName'] ?? null,
-                        'stockMovements' => [
-                            ['sku' => $cfgData2['wd']  ?? '', 'qty' => 1, 'role' => 'dose-vorabmuster'],
-                            ['sku' => $cfgData2['wkn'] ?? '', 'qty' => 1, 'role' => 'karte-neutral'],
-                        ],
-                    ]);
-                    $allItems[] = $vmLi;
-                }
-            }
+            // Theilich 2026-05-19: Vorabmuster ist jetzt ein eigenständiges Produkt
+            // (eigener Endpoint /dosenzauber/add-vorabmuster) und gehört NICHT mehr
+            // zum Haupt-Cart-Add-Flow.
 
             $cart = $this->cartService->add($cart, $allItems, $context);
 
@@ -494,7 +548,8 @@ class DosenzauberController extends StorefrontController
 
     /**
      * Logo-Upload: speichert die hochgeladene Datei und verknüpft sie via Payload-Update
-     * mit dem zuvor angelegten LineItem. Akzeptiert PNG/JPG/SVG/PDF bis 5 MB.
+     * mit dem zuvor angelegten LineItem. Akzeptiert PNG/JPG/SVG/PDF bis 25 MB.
+     * Theilich 2026-05-19: Limit von 5 MB → 25 MB erhöht (Kundenlogos in hoher Auflösung).
      */
     #[Route(
         path: '/dosenzauber/upload-logo',
@@ -519,8 +574,8 @@ class DosenzauberController extends StorefrontController
             if (!in_array($mime, $allowed, true)) {
                 return new JsonResponse(['ok' => false, 'error' => 'Dateityp nicht erlaubt: ' . $mime], 415);
             }
-            if ($size > 5 * 1024 * 1024) {
-                return new JsonResponse(['ok' => false, 'error' => 'Datei zu groß (max. 5 MB)'], 413);
+            if ($size > 25 * 1024 * 1024) {
+                return new JsonResponse(['ok' => false, 'error' => 'Datei zu groß (max. 25 MB)'], 413);
             }
 
             $cart = $this->cartService->getCart($context->getToken(), $context);
