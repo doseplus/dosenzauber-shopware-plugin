@@ -785,10 +785,17 @@ class DosenzauberController extends StorefrontController
         $laser   = $cfg['laser'] ?? [];
         $fuell   = $cfg['fuellung'] ?? [];
 
+        // Theilich 2026-05-20: Lasergravur-Staffelpreis muss im Cart der Stückzahl
+        // entsprechen — Shopware hatte NK LG fix auf 1,05 €, was bei >500 Stk. falsch ist.
+        // laserStaffel aus dem Provider: [<99, 100+, 300+, 500+, 1k+, 2k+]
+        $providerData = $this->dataProvider->getDataForProduct($baseProduct, $context);
+        $laserStaffel = $providerData['laserStaffel'] ?? [1.55, 1.05, 1.00, 0.87, 0.72, 0.70];
+        $laserPricePerUnit = $this->resolveLaserPrice($quantity, $laserStaffel);
+
         $additions = [];
 
         if (!empty($options['laser'])) {
-            $additions[] = ['number' => 'NK LG', 'qty' => $quantity, 'label' => 'Lasergravur'];
+            $additions[] = ['number' => 'NK LG', 'qty' => $quantity, 'label' => 'Lasergravur', 'overridePrice' => $laserPricePerUnit];
             $additions[] = ['number' => 'NK LG Maschinenrüstung', 'qty' => 1, 'label' => 'Maschinenrüstung Laser'];
             if (!empty($laser['personalisierung'])) {
                 $additions[] = ['number' => 'NK PERS', 'qty' => 1, 'label' => 'Personalisierung'];
@@ -855,10 +862,43 @@ class DosenzauberController extends StorefrontController
             ]);
             $optItem->setRemovable(true);
             $optItem->setStackable(true);
+
+            // Theilich 2026-05-20: Preis-Override für NK LG aus laserStaffel — sonst
+            // berechnet Shopware den Standardpreis (1,05€) statt des Staffelpreises.
+            if (isset($add['overridePrice']) && $add['overridePrice'] > 0) {
+                $unitPrice = (float) $add['overridePrice'];
+                $qty       = (int) $add['qty'];
+                $totalPrice = round($unitPrice * $qty, 2);
+                $taxRules  = $optProduct->getCalculatedPrice()?->getTaxRules() ?? new TaxRuleCollection();
+                $calcTaxes = new CalculatedTaxCollection();
+                $optItem->setPriceDefinition(new QuantityPriceDefinition($unitPrice, $taxRules, $qty));
+                $optItem->setPrice(new CalculatedPrice($unitPrice, $totalPrice, $calcTaxes, $taxRules, $qty));
+                $optItem->setPayloadValue('dpStaffelPriceOverride', [
+                    'unitPrice' => $unitPrice,
+                    'staffel'   => $cfg['staffel'] ?? '',
+                ]);
+            }
+
             $items[] = $optItem;
         }
 
         return $items;
+    }
+
+    /**
+     * Theilich 2026-05-20: Berechnet den Lasergravur-Stückpreis aus der Staffel.
+     * staffelIdx-Logik analog zum Konfigurator-Twig:
+     *   <99 = idx 0 · 100-299 = idx 1 · 300-499 = idx 2 · 500-999 = idx 3 · 1000-1999 = idx 4 · 2000+ = idx 5
+     */
+    private function resolveLaserPrice(int $quantity, array $staffel): float
+    {
+        $idx = 0;
+        if ($quantity >= 2000) $idx = 5;
+        elseif ($quantity >= 1000) $idx = 4;
+        elseif ($quantity >= 500)  $idx = 3;
+        elseif ($quantity >= 300)  $idx = 2;
+        elseif ($quantity >= 100)  $idx = 1;
+        return isset($staffel[$idx]) ? (float)$staffel[$idx] : 0.0;
     }
 
     /**
